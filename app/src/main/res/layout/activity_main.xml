@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootHud"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F14">
+
+    <!-- Hidden compatibility views used internally by MainActivity.kt -->
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/logText"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/statusDot"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
+    <!-- Top bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="70dp"
+        android:paddingEnd="16dp"
+        android:background="#10151B">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="J.A.R.V.I.S."
+            android:textColor="#8DEFFF"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.15" />
+
+        <TextView
+            android:id="@+id/topClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:textColor="#E8FFFF"
+            android:textSize="13sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Left sidebar navigation -->
+    <LinearLayout
+        android:layout_width="64dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:orientation="vertical"
+        android:paddingTop="52dp"
+        android:background="#10151B">
+
+        <TextView
+            android:id="@+id/navHome"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="HOME"
+            android:textColor="#8DEFFF"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:background="#16232A"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navMap"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="MAP"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navLab"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="LAB"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navSys"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="SYS"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navNet"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="NET"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navAi"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="AI"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Content area (to the right of sidebar, below top bar) -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="64dp"
+        android:layout_marginTop="44dp">
+
+        <!-- HOME panel: the existing Jarvis dial -->
+        <FrameLayout
+            android:id="@+id/homePanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible">
+
+            <FrameLayout
+                android:id="@+id/micButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clickable="true"
+                android:focusable="true">
+
+                <com.jarvis.assistant.JarvisDialView
+                    android:id="@+id/jarvisDial"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <TextView
+                    android:id="@+id/micIcon"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <!-- MAP panel: real device location -->
+        <LinearLayout
+            android:id="@+id/mapPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LOCATION DATA"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/mapLat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="LAT: --"
+                android:textColor="#D7FBFF"
+                android:textSize="15sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/mapLon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="LON: --"
+                android:textColor="#D7FBFF"
+                android:textSize="15sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/mapStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="TAP TO REQUEST LOCATION"
+                android:textColor="#5C7A82"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:clickable="true"
+                android:focusable="true"
+                />
+        </LinearLayout>
+
+        <!-- LAB panel: hologram design feature + saved designs -->
+        <LinearLayout
+            android:id="@+id/labPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="DESIGN LAB"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="\u0642\u0648\u0644 \u0628\u0635\u0648\u062A\u0643: \u062C\u0627\u0631\u0641\u0633 \u0635\u0645\u0645\u0644\u064A ..."
+                android:textColor="#5C7A82"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:id="@+id/labProjectsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="NO PROJECTS YET"
+                    android:textColor="#8AA0A8"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="8dp" />
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- SYS panel: real device controls -->
+        <LinearLayout
+            android:id="@+id/sysPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SYSTEM"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/sysBattery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="BATTERY: --%"
+                android:textColor="#D7FBFF"
+                android:textSize="14sp"
+                android:fontFamily="monospace" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="24dp">
+
+                <TextView
+                    android:id="@+id/sysFlashToggle"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="FLASH"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysCameraButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="CAMERA"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysSettingsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="SETTINGS"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- NET panel: honestly marked unavailable -->
+        <LinearLayout
+            android:id="@+id/netPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:text="NET"
+                android:textColor="#76E8F5"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:layout_gravity="center_horizontal"
+                android:text="\u063A\u064A\u0631 \u0645\u062A\u0648\u0641\u0631: \u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u062A\u062D\u062A\u0627\u062C \u0633\u064A\u0631\u0641\u0631 \u062E\u0627\u0631\u062C\u064A \u0645\u0627 \u0639\u0646\u062F\u0646\u0627\u0634"
+                android:textColor="#5C7A82"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:gravity="center" />
+        </LinearLayout>
+
+        <!-- AI panel: Gemini-backed suggestions -->
+        <LinearLayout
+            android:id="@+id/aiPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AI SUGGESTIONS"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/aiRefreshButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="TAP TO GENERATE"
+                android:textColor="#5C7A82"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:id="@+id/aiSuggestionsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#8AA0A8"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="8dp" />
+            </ScrollView>
+        </LinearLayout>
+
+    </FrameLayout>
+
+</FrameLayout>
