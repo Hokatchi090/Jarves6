@@ -16,8 +16,6 @@ import android.speech.SpeechRecognizer
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.app.Dialog
-import android.webkit.WebView
-import android.webkit.WebSettings
 import android.widget.FrameLayout
 import android.graphics.Color
 import android.graphics.Typeface
@@ -32,6 +30,7 @@ import androidx.core.app.ActivityCompat
 import net.objecthunter.exp4j.ExpressionBuilder
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.*
 import android.provider.ContactsContract
@@ -50,31 +49,6 @@ import org.json.JSONObject
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
-    // Helper functions for responses
-private fun respond(message: String) {
-    // عرض الرسالة في واجهة التطبيق (TextView أو Toast)
-    // نفترض وجود textView أو snackbar
-    runOnUiThread {
-        // مثال: Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        // أو تحديث نص في واجهة المستخدم
-        binding?.tvResponse?.text = message
-    }
-}
-
-private fun saveNote(content: String) {
-    // حفظ الملاحظة في SharedPreferences أو ملف
-    val prefs = getSharedPreferences("JarvisNotes", MODE_PRIVATE)
-    prefs.edit().putString("note_${System.currentTimeMillis()}", content).apply()
-}
-
-private fun extractNameAfter(text: String, keyword: String): String? {
-    // استخراج النص بعد الكلمة المفتاحية
-    val index = text.indexOf(keyword, ignoreCase = true)
-    return if (index != -1) {
-        text.substring(index + keyword.length).trim().takeIf { it.isNotEmpty() }
-    } else null
-}
-
     private lateinit var tts: TextToSpeech
     private lateinit var logText: TextView
     private lateinit var statusText: TextView
@@ -85,9 +59,6 @@ private fun extractNameAfter(text: String, keyword: String): String? {
     private var currentLangCode = "ar"
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
-    private lateinit var commandRouter: JarvisCommandRouter
-    private lateinit var systemModule: JarvisSystemModule
-    private lateinit var moduleManager: JarvisModuleManager
     private var userName: String = ""
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
@@ -96,17 +67,12 @@ private fun extractNameAfter(text: String, keyword: String): String? {
     // ---- \u0636\u064A\u0641 \u0645\u0641\u062A\u0627\u062D Google Gemini \u0627\u0644\u062E\u0627\u0635 \u0641\u064A\u0643 \u0647\u0648\u0646 \u0628\u064A\u0646 \u0639\u0644\u0627\u0645\u062A\u064A \u0627\u0644\u062A\u0646\u0635\u064A\u0635 ----
     // \u0627\u062D\u0635\u0644 \u0639\u0644\u064A\u0647 \u0645\u062C\u0627\u0646\u064B\u0627 \u0645\u0646: https://aistudio.google.com/apikey
     // \u062E\u0644\u064A\u0647 \u0641\u0627\u0636\u064A "" \u0625\u0630\u0627 \u0628\u062F\u0643 \u062A\u0628\u0642\u064A \u062C\u0627\u0631\u0641\u0633 \u0623\u0648\u0641\u0644\u0627\u064A\u0646 \u0628\u0627\u0644\u0643\u0627\u0645\u0644
-    private val GEMINI_API_KEY = ""
+    private val GEMINI_API_KEY = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
 
     // ---- \u0636\u064A\u0641 \u0645\u0641\u062A\u0627\u062D Google Maps \u0647\u0648\u0646 \u0644\u0645\u0633\u0627\u0641\u0627\u062A \u062D\u0642\u064A\u0642\u064A\u0629 \u0628\u0627\u0644\u0637\u0631\u064A\u0642 ----
     // \u0627\u062D\u0635\u0644 \u0639\u0644\u064A\u0647 \u0645\u0646: https://console.cloud.google.com/google/maps-apis
     // \u062E\u0644\u064A\u0647 \u0641\u0627\u0636\u064A "" \u0625\u0630\u0627 \u0628\u062F\u0643 \u064A\u0633\u062A\u062E\u062F\u0645 \u062D\u0633\u0627\u0628 \u062A\u0642\u0631\u064A\u0628\u064A (\u062E\u0637 \u0645\u0633\u062A\u0642\u064A\u0645) \u0628\u062F\u0648\u0646 \u0645\u0641\u062A\u0627\u062D
     private val GOOGLE_MAPS_API_KEY = ""
-
-    private data class JarvisApp(
-        val name: String,
-        val packageName: String
-    )
 
     companion object {
         private const val REQ_SPEECH = 100
@@ -118,24 +84,6 @@ private fun extractNameAfter(text: String, keyword: String): String? {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         jarvisDial = findViewById(R.id.jarvisDial)
-
-        moduleManager = JarvisModuleManager()
-
-        systemModule = JarvisSystemModule(
-            activity = this,
-            speak = { text -> respond(text) }
-        )
-
-        commandRouter = JarvisCommandRouter(
-            legacyHandler = { command -> handleLegacyCommand(command) },
-            appLauncher = { appName -> launchDynamicApp(appName) },
-            systemHandler = { intent -> systemModule.execute(intent) },
-            appsHandler = { intent -> handleAppsIntent(intent) }
-        )
-
-        jarvisDial.setAppClickListener { appName ->
-            launchDynamicApp(appName)
-        }
 
         statusText = findViewById(R.id.statusText)
         logText = findViewById(R.id.logText)
@@ -214,52 +162,20 @@ private fun extractNameAfter(text: String, keyword: String): String? {
 
     // \u0645\u0644\u0627\u062D\u0638\u0629: JarvisDialView \u0627\u0644\u062C\u062F\u064A\u062F \u064A\u062D\u0631\u0643 \u0646\u0641\u0633\u0647 \u062F\u0627\u062E\u0644\u064A\u064B\u0627 \u0639\u0628\u0631 postInvalidateOnAnimation()\u060C \u0641\u0645\u0627 \u0639\u0627\u062F \u0641\u064A\u0647 \u062D\u0627\u062C\u0629 \u0644\u062F\u0648\u0627\u0644 \u062A\u062F\u0648\u064A\u0631 \u062E\u0627\u0631\u062C\u064A\u0629
 
-    private fun configureJarvisVoice() {
-        val locale = when (currentLangCode) {
-            "en" -> Locale.US
-            "fr" -> Locale.FRANCE
-            "es" -> Locale("es")
-            "ru" -> Locale("ru")
-            "zh" -> Locale.SIMPLIFIED_CHINESE
-            else -> Locale("ar", "DZ")
-        }
-
-        try {
-            tts.language = locale
-
-            val voices = tts.voices?.filter { it.locale.language == locale.language } ?: emptyList()
-
-            if (voices.isNotEmpty()) {
-                val preferred = voices.firstOrNull { voice ->
-                    val name = voice.name.lowercase(Locale.ROOT)
-                    !name.contains("female")
-                } ?: voices.first()
-
-                tts.voice = preferred
-            }
-
-            when (currentLangCode) {
-                "en" -> {
-                    tts.setPitch(0.95f)
-                    tts.setSpeechRate(0.92f)
-                }
-                "fr" -> {
-                    tts.setPitch(0.94f)
-                    tts.setSpeechRate(0.91f)
-                }
-                else -> {
-                    tts.setPitch(0.92f)
-                    tts.setSpeechRate(0.90f)
-                }
-            }
-        } catch (e: Exception) {
-            // keep device default if voice selection fails
-        }
-    }
-
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            configureJarvisVoice()
+            tts.language = Locale("ar")
+            tts.setPitch(0.6f)
+            tts.setSpeechRate(0.88f)
+            val arabicVoices = tts.voices?.filter { it.locale.language == "ar" }
+            val maleVoice = arabicVoices?.firstOrNull { voice ->
+                val n = voice.name.lowercase(Locale.ROOT)
+                (n.contains("male") && !n.contains("female")) ||
+                        n.contains("-d-") || n.contains("#male")
+            }
+            if (maleVoice != null) {
+                tts.voice = maleVoice
+            }
 
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
@@ -425,20 +341,16 @@ private fun extractNameAfter(text: String, keyword: String): String? {
 
     private fun handleCommand(text: String) {
         try {
-            commandRouter.route(text)
+            handleCommandInternal(text)
         } catch (e: Exception) {
             respond("\u0645\u0627 \u0641\u0647\u0645\u062A\u0634")
         }
     }
 
-    private fun handleLegacyCommand(text: String) {
+    private fun handleCommandInternal(text: String) {
         val cmd = text.lowercase(Locale("ar")).trim()
 
         when {
-            cmd.contains("\u0627\u0644\u0645\u062E\u062A\u0628\u0631 \u0627\u0644\u062B\u0644\u0627\u062B\u064A") || cmd.contains("3d") ||
-                    cmd.contains("design lab") -> {
-                showDesignLab()
-            }
             cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") || cmd.contains("\u0627\u0628\u062F\u0623 \u0645\u062D\u0627\u0636\u0631\u0629") ||
                     cmd.contains("\u0633\u062C\u0644 \u0645\u062D\u0627\u0636\u0631\u0629") -> {
                 startLectureMode()
@@ -802,45 +714,18 @@ private fun extractNameAfter(text: String, keyword: String): String? {
     }
 
     private fun offlineRules(cmd: String): String? {
-        val nameSuffix = if (userName.isNotBlank()) " $userName" else ""
-
+        val nameSuffix = if (userName.isNotBlank()) " \u064A\u0627 $userName" else ""
         return when {
-            cmd.contains("\u0645\u0631\u062D\u0628\u0627") || cmd.contains("\u0647\u0644\u0627") || cmd.contains("\u0627\u0644\u0633\u0644\u0627\u0645") -> {
-                when (currentLangCode) {
-                    "en" -> "Hello$nameSuffix. How can I help?"
-                    "fr" -> "Bonjour$nameSuffix. Comment puis-je vous aider ?"
-                    else -> "\u0645\u0631\u062D\u0628\u0627\u064B$nameSuffix. \u0643\u064A\u0641 \u0623\u0633\u0627\u0639\u062F\u0643\u061F"
-                }
-            }
-            cmd.contains("\u0643\u064A\u0641\u0643") || cmd.contains("\u0643\u064A\u0641 \u062D\u0627\u0644\u0643") || cmd.contains("\u0634\u062E\u0628\u0627\u0631\u0643") -> {
-                when (currentLangCode) {
-                    "en" -> "All systems are operational."
-                    "fr" -> "Tous les systemes sont operationnels."
-                    else -> "\u062C\u0645\u064A\u0639 \u0627\u0644\u0623\u0646\u0638\u0645\u0629 \u062A\u0639\u0645\u0644 \u0628\u0634\u0643\u0644 \u0637\u0628\u064A\u0639\u064A."
-                }
-            }
-            cmd.contains("\u0645\u0646 \u0627\u0646\u062A") || cmd.contains("\u0645\u0646 \u062A\u0643\u0648\u0646") || cmd.contains("\u0648\u0634 \u0627\u0633\u0645\u0643") || cmd.contains("\u0645\u0627 \u0627\u0633\u0645\u0643") -> {
-                when (currentLangCode) {
-                    "en" -> "I'm JARVIS, your personal assistant."
-                    "fr" -> "Je suis JARVIS, votre assistant personnel."
-                    else -> "\u0623\u0646\u0627 \u062C\u0627\u0631\u0641\u0633\u060C \u0645\u0633\u0627\u0639\u062F\u0643 \u0627\u0644\u0634\u062E\u0635\u064A."
-                }
-            }
-            cmd.contains("\u0627\u0644\u0633\u0627\u0639\u0629") || cmd.contains("\u0643\u0645 \u0627\u0644\u0633\u0627\u0639\u0629") -> {
-                val time = java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-                when (currentLangCode) {
-                    "en" -> "The time is $time."
-                    "fr" -> "Il est $time."
-                    else -> "\u0627\u0644\u0648\u0642\u062A \u0627\u0644\u0622\u0646 $time."
-                }
-            }
-            cmd.contains("\u0634\u0643\u0631\u0627") || cmd.contains("\u0634\u0643\u0631\u0627\u064B") || cmd.contains("\u064A\u0639\u0637\u064A\u0643 \u0627\u0644\u0635\u062D\u0629") -> {
-                when (currentLangCode) {
-                    "en" -> "You're welcome."
-                    "fr" -> "Je vous en prie."
-                    else -> "\u0627\u0644\u0639\u0641\u0648."
-                }
-            }
+            cmd.contains("\u0645\u0631\u062D\u0628\u0627") || cmd.contains("\u0647\u0644\u0627") || cmd.contains("\u0627\u0644\u0633\u0644\u0627\u0645") ->
+                listOf("\u0623\u0647\u0644\u0627 \u0628\u064A\u0643${nameSuffix}\u060C \u0648\u064A\u0646 \u0631\u0627\u0643\u061F", "\u0647\u0644\u0627${nameSuffix}\u060C \u0634\u0646\u0648 \u0646\u062F\u064A\u0631\u0644\u0643\u061F", "\u0623\u0647\u0644\u064A\u0646${nameSuffix}\u060C \u0642\u0648\u0644\u0651\u064A \u0643\u064A \u0646\u0639\u0627\u0648\u0646\u0643").random()
+            cmd.contains("\u0643\u064A\u0641\u0643") || cmd.contains("\u0634\u062E\u0628\u0627\u0631\u0643") ->
+                listOf("\u0644\u0627\u0628\u0627\u0633 \u0627\u0644\u062D\u0645\u062F\u0644\u0644\u0647\u060C \u0648\u0627\u0646\u062A \u0643\u064A\u0641\u0643${nameSuffix}\u061F", "\u0645\u0644\u064A\u062D \u0628\u0632\u0627\u0641\u060C \u0648\u0627\u0646\u062A\u061F").random()
+            cmd.contains("\u0627\u0644\u0633\u0627\u0639\u0629") ->
+                "\u0627\u0644\u0633\u0627\u0639\u0629 \u0647\u0644\u0642 ${java.text.SimpleDateFormat("HH:mm").format(Date())}"
+            cmd.contains("\u0645\u064A\u0646 \u0627\u0646\u062A") || cmd.contains("\u0634\u0648 \u0627\u0633\u0645\u0643") ->
+                "\u0623\u0646\u0627 \u062C\u0627\u0631\u0641\u0633\u060C \u0635\u0627\u062D\u0628\u0643 \u0627\u0644\u0634\u062E\u0635\u064A\u060C \u062C\u0627\u0647\u0632 \u0646\u0639\u0627\u0648\u0646\u0643 \u0628\u0623\u064A \u062D\u0627\u062C\u0629"
+            cmd.contains("\u0634\u0643\u0631\u0627") || cmd.contains("\u064A\u0639\u0637\u064A\u0643 \u0627\u0644\u0635\u062D\u0629") ->
+                listOf("\u0627\u0644\u0639\u0641\u0648\u060C \u0647\u0630\u0627 \u0648\u0627\u062C\u0628\u064A", "\u0648\u0644\u0627 \u064A\u0647\u0645\u0643\u060C \u0623\u0646\u0627 \u0647\u0646\u0627 \u0648\u0642\u062A\u0627\u0634 \u062A\u062D\u062A\u0627\u062C\u0646\u064A").random()
             else -> null
         }
     }
@@ -849,24 +734,7 @@ private fun extractNameAfter(text: String, keyword: String): String? {
         val nameContext = if (userName.isNotBlank()) "\u0627\u0633\u0645\u064A ${userName}\u060C \u062E\u0627\u0637\u0628\u0646\u064A \u0628\u0627\u0633\u0645\u064A \u0623\u062D\u064A\u0627\u0646\u064B\u0627. " else ""
         val identityContext = "\u0623\u0646\u062A \u062C\u0627\u0631\u0641\u0633\u060C \u0645\u0633\u0627\u0639\u062F \u0634\u062E\u0635\u064A \u0628\u0634\u062E\u0635\u064A\u0629 \u0648\u0627\u062D\u062F\u0629 \u0645\u0648\u062D\u062F\u0629 \u0628\u0643\u0644 \u0627\u0644\u0644\u063A\u0627\u062A. "
         val languageRule = "\u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0644\u063A\u0629: \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0633\u0624\u0627\u0644 \u0645\u062E\u0644\u0648\u0637 \u0628\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0644\u063A\u0629 \u062A\u0627\u0646\u064A\u0629 (\u0645\u062A\u0644 \u0639\u0631\u0628\u064A \u0645\u0639 \u0625\u0646\u062C\u0644\u064A\u0632\u064A \u0623\u0648 \u0641\u0631\u0646\u0633\u0627\u0648\u064A)\u060C \u062C\u0627\u0648\u0628 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0628\u0633. \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0633\u0624\u0627\u0644 \u0628\u0644\u063A\u0629 \u0648\u062D\u062F\u0629 \u0635\u0627\u0641\u064A\u0629 \u0628\u062F\u0648\u0646 \u062E\u0644\u0637\u060C \u062C\u0627\u0648\u0628 \u0628\u0646\u0641\u0633 \u0647\u0627\u064A \u0627\u0644\u0644\u063A\u0629. "
-        val styleRule = """
-JARVIS communication protocol:
-1. Be calm, intelligent, precise and concise.
-2. Never sound angry, childish, confused or theatrical.
-3. Never use exaggerated slang in any language.
-4. When the user speaks Arabic, respond in clear natural Arabic.
-5. Local expressions may be used occasionally only when they sound natural.
-6. When the user speaks English, respond in English.
-7. When the user speaks French, respond in French.
-8. Preserve the user's language whenever possible.
-9. Do not repeat greetings unnecessarily.
-10. Do not use filler phrases.
-11. Do not call yourself the user's personal friend.
-12. For simple actions, answer briefly.
-13. For technical questions, answer technically and clearly.
-14. Never claim an action was completed unless it actually was.
-15. Behave like a sophisticated, professional personal AI assistant.
-""".trimIndent() + " "
+        val styleRule = "\u062C\u0627\u0648\u0628\u0646\u064A \u0628\u0627\u0644\u0644\u0647\u062C\u0629 \u0627\u0644\u062C\u0632\u0627\u0626\u0631\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u064A\u0629 \u0627\u0644\u0637\u0628\u064A\u0639\u064A\u0629\u060C \u0628\u062C\u0645\u0644 \u0642\u0635\u064A\u0631\u0629 \u0648\u0648\u0627\u0636\u062D\u0629 \u0648\u0628\u0633\u064A\u0637\u0629\u060C \u0628\u062F\u0648\u0646 \u062A\u0639\u0642\u064A\u062F \u0648\u0644\u0627 \u0631\u0633\u0645\u064A\u0627\u062A \u0632\u0627\u064A\u062F\u0629\u060C \u0648\u0628\u062F\u0648\u0646 \u0643\u0644\u0645\u0627\u062A \u0641\u0635\u062D\u0649 \u0635\u0639\u0628\u0629. "
         val promptWithStyle = "$identityContext$languageRule$styleRule$nameContext$message"
 
         val jsonBody = JSONObject().apply {
@@ -879,10 +747,7 @@ JARVIS communication protocol:
             ))
         }
 
-        val body = RequestBody.create(
-            "application/json".toMediaTypeOrNull(),
-            jsonBody.toString()
-        )
+        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
         val request = Request.Builder()
             .url(url)
@@ -1104,33 +969,33 @@ JARVIS communication protocol:
         when {
             cmd.contains("\u0639\u0631\u0628\u064A") || cmd.contains("arabic") || cmd.contains("arabe") -> {
                 currentLangCode = "ar"
-                configureJarvisVoice()
+                tts.language = Locale("ar")
                 respond("\u062A\u0645\u0627\u0645\u060C \u0631\u062D \u0623\u0633\u0645\u0639\u0643 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0647\u0644\u0642\u060C \u0623\u0646\u0627 \u0644\u0633\u0627 \u062C\u0627\u0631\u0641\u0633")
             }
             cmd.contains("\u0641\u0631\u0646\u0633") || cmd.contains("french") || cmd.contains("fran\u00E7ais") -> {
                 currentLangCode = "fr"
-                configureJarvisVoice()
+                tts.language = Locale.FRENCH
                 respond("D'accord, je t'\u00E9coute en fran\u00E7ais maintenant, je suis toujours Jarvis")
             }
             cmd.contains("\u0627\u0646\u062C\u0644\u064A\u0632") || cmd.contains("english") || cmd.contains("anglais") -> {
                 currentLangCode = "en"
-                configureJarvisVoice()
+                tts.language = Locale.ENGLISH
                 respond("Okay, I'm listening in English now, still Jarvis")
             }
             cmd.contains("\u0627\u0633\u0628\u0627\u0646") || cmd.contains("spanish") || cmd.contains("espa\u00F1ol") -> {
                 currentLangCode = "es"
-                configureJarvisVoice()
+                tts.language = Locale("es")
                 respond("Vale, ahora te escucho en espa\u00F1ol, sigo siendo Jarvis")
             }
             cmd.contains("\u0631\u0648\u0633") || cmd.contains("russian") || cmd.contains("\u0440\u0443\u0441\u0441\u043A") -> {
                 currentLangCode = "ru"
-                configureJarvisVoice()
+                tts.language = Locale("ru")
                 respond("\u0425\u043E\u0440\u043E\u0448\u043E, \u0442\u0435\u043F\u0435\u0440\u044C \u044F \u0441\u043B\u0443\u0448\u0430\u044E \u043F\u043E-\u0440\u0443\u0441\u0441\u043A\u0438, \u044F \u0432\u0441\u0451 \u0442\u043E\u0442 \u0436\u0435 \u0414\u0436\u0430\u0440\u0432\u0438\u0441")
             }
             cmd.contains("\u0645\u0627\u0646\u062F\u0631\u064A\u0646") || cmd.contains("\u0635\u064A\u0646\u064A") || cmd.contains("mandarin") ||
                     cmd.contains("chinese") || cmd.contains("\u4E2D\u6587") -> {
                 currentLangCode = "zh"
-                configureJarvisVoice()
+                tts.language = Locale.SIMPLIFIED_CHINESE
                 respond("\u597D\u7684\uFF0C\u73B0\u5728\u6211\u542C\u4E2D\u6587\u4E86\uFF0C\u6211\u8FD8\u662F\u8D3E\u7EF4\u65AF")
             }
             else -> {
@@ -1256,4 +1121,488 @@ JARVIS communication protocol:
 
     // ---------------- Jokes ----------------
 
-    // ---------------- Dynamic app scanner ----------------
+    private val jokes = listOf(
+        "\u0648\u0627\u062D\u062F \u0633\u0623\u0644 \u0635\u0627\u062D\u0628\u0648: \u0639\u0644\u0627\u0634 \u0627\u0644\u062F\u064A\u0643 \u064A\u0635\u064A\u062D \u0627\u0644\u0635\u0628\u0627\u062D\u061F \u0642\u0627\u0644\u0647: \u0628\u0627\u0634 \u064A\u0641\u0648\u0642\u0643 \u0642\u0628\u0644 \u0645\u0627 \u062A\u0641\u0648\u062A\u0647 \u0628\u0627\u0644\u0646\u0648\u0645.",
+        "\u0637\u0641\u0644 \u0633\u0623\u0644 \u0628\u0627\u0628\u0627\u0647: \u0628\u0627\u0628\u0627 \u0648\u064A\u0646 \u062A\u062D\u0628 \u062A\u0643\u0648\u0646 \u0644\u0645\u0627 \u062A\u0643\u0628\u0631\u061F \u0642\u0627\u0644\u0647: \u0647\u0627\u062F\u064A \u0647\u064A \u0627\u0644\u0645\u0634\u0643\u0644\u0629\u060C \u0623\u0646\u0627 \u0643\u0628\u0631\u062A \u0648\u0645\u0627 \u0632\u0644\u062A \u0645\u0627 \u0639\u0631\u0641\u062A\u0634.",
+        "\u0648\u0627\u062D\u062F \u062F\u062E\u0644 \u064A\u0634\u062A\u0631\u064A \u0633\u0627\u0639\u0629\u060C \u0642\u0627\u0644\u0647 \u0627\u0644\u0628\u064A\u0627\u0639: \u0647\u0627\u064A \u0627\u0644\u0633\u0627\u0639\u0629 \u0628\u062A\u0639\u064A\u0634 \u0645\u0639\u0627\u0643 \u0644\u0644\u0623\u0628\u062F. \u0642\u0627\u0644\u0647: \u0637\u064A\u0628 \u0623\u0639\u0637\u064A\u0646\u064A \u0648\u062D\u062F\u0629 \u062A\u0639\u064A\u0634 \u0623\u0633\u0628\u0648\u0639 \u0628\u0633\u060C \u062E\u0627\u064A\u0641 \u0646\u0636\u064A\u0639\u0647\u0627.",
+        "\u0639\u0644\u0627\u0634 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0627 \u0628\u064A\u062D\u0633 \u0628\u0627\u0644\u0628\u0631\u062F\u061F \u0644\u0623\u0646\u0647 \u0639\u0646\u062F\u0647 Windows \u0645\u0633\u0643\u0631\u0629 \u0632\u064A\u0646."
+    )
+
+    // ---------------- Notes ----------------
+
+    private fun saveNote(note: String) {
+        val prefs = getSharedPreferences("jarvis_notes", Context.MODE_PRIVATE)
+        val existing = prefs.getStringSet("notes", mutableSetOf()) ?: mutableSetOf()
+        val updated = existing.toMutableSet()
+        updated.add(note)
+        prefs.edit().putStringSet("notes", updated).apply()
+    }
+
+    private fun readNotes(): String {
+        val prefs = getSharedPreferences("jarvis_notes", Context.MODE_PRIVATE)
+        val notes = prefs.getStringSet("notes", setOf()) ?: setOf()
+        if (notes.isEmpty()) return "\u0645\u0627 \u0639\u0646\u062F\u0643 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629"
+        return "\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643: " + notes.joinToString("\u060C ")
+    }
+
+    // ---------------- Natural response variety ----------------
+
+    private val flashOnPhrases = listOf(
+        "\u062F\u0627\u064A\u0631\u0644\u0643 \u0627\u0644\u0641\u0644\u0627\u0634", "\u062A\u0645\u0627\u0645\u060C \u0648\u0644\u0651\u0649 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644", "\u0647\u0627\u0643 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644"
+    )
+    private val flashOffPhrases = listOf(
+        "\u0637\u0641\u064A\u062A \u0627\u0644\u0641\u0644\u0627\u0634", "\u062A\u0645\u0627\u0645\u060C \u0627\u0644\u0641\u0644\u0627\u0634 \u0637\u0627\u0641\u064A \u0647\u0644\u0642", "\u062E\u0644\u0627\u0635 \u0637\u0641\u0627\u0647"
+    )
+    private val musicOnPhrases = listOf(
+        "\u0647\u0627\u0643\u0647\u0627 \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649 \u0628\u062F\u0627\u062A", "\u062A\u0645\u0627\u0645\u060C \u0646\u062F\u064A\u0631\u0644\u0643 \u0645\u0648\u0633\u064A\u0642\u0649", "\u0627\u0633\u062A\u0645\u062A\u0639 \u0628\u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649"
+    )
+    private val musicOffPhrases = listOf(
+        "\u0648\u0642\u0641\u062A \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649", "\u062A\u0645\u0627\u0645\u060C \u0633\u0643\u062A\u0647\u0627"
+    )
+
+    private fun openApp(packageName: String, appName: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        if (launchIntent != null) {
+            startActivity(launchIntent)
+            respond("\u062C\u0627\u0631\u064A \u0641\u062A\u062D $appName")
+        } else {
+            respond("$appName \u0645\u0634 \u0645\u062B\u0628\u062A \u0639\u0644\u0649 \u062C\u0647\u0627\u0632\u0643")
+        }
+    }
+
+    // ---------------- Call a contact ----------------
+
+    private fun extractNameAfter(cmd: String, marker: String): String {
+        val idx = cmd.indexOf(marker)
+        if (idx == -1) return ""
+        return cmd.substring(idx + marker.length).trim()
+    }
+
+    private fun callContact(name: String) {
+        if (name.isBlank()) {
+            respond("\u0642\u0644\u064A \u0645\u064A\u0646 \u0628\u062F\u0643 \u0623\u062A\u0635\u0644 \u0641\u064A\u0647")
+            return
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), REQ_CONTACTS)
+            respond("\u0628\u062F\u064A \u0625\u0630\u0646 \u0642\u0631\u0627\u0621\u0629 \u062C\u0647\u0627\u062A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0623\u0648\u0644\u060C \u062C\u0631\u0628 \u0645\u0631\u0629 \u062A\u0627\u0646\u064A\u0629")
+            return
+        }
+        val cursor = contentResolver.query(
+            ContactsContract.Contacts.CONTENT_URI,
+            null,
+            "${ContactsContract.Contacts.DISPLAY_NAME} LIKE ?",
+            arrayOf("%$name%"),
+            null
+        )
+        cursor?.use { c ->
+            if (c.moveToFirst()) {
+                val contactId = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
+                val phoneCursor = contentResolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    null,
+                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                    arrayOf(contactId),
+                    null
+                )
+                phoneCursor?.use { pc ->
+                    if (pc.moveToFirst()) {
+                        val number = pc.getString(
+                            pc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        )
+                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
+                        startActivity(dialIntent)
+                        respond("\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0640 $name")
+                    } else {
+                        respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u0631\u0642\u0645 \u0647\u0627\u062A\u0641 \u0644\u0640 $name")
+                    }
+                }
+            } else {
+                respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u062C\u0647\u0629 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0633\u0645 $name")
+            }
+        }
+    }
+
+    private fun writeCode(topic: String) {
+        if (topic.isBlank()) {
+            respond("\u0642\u0644\u064A \u0634\u0648 \u0627\u0644\u0643\u0648\u062F \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u064A\u0627\u0647")
+            return
+        }
+        if (GEMINI_API_KEY.isBlank()) {
+            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0643\u062A\u0628\u0644\u0643 \u0643\u0648\u062F")
+            return
+        }
+        respond("\u062E\u0644\u064A\u0646\u064A \u0623\u0643\u062A\u0628\u0644\u0643 \u0627\u0644\u0643\u0648\u062F...")
+        val prompt = "\u0627\u0643\u062A\u0628 \u0643\u0648\u062F \u0628\u0631\u0645\u062C\u064A \u0648\u0627\u0636\u062D \u0648\u0645\u0631\u062A\u0628 \u0644\u0640: $topic. \u0627\u0634\u0631\u062D \u0628\u062C\u0645\u0644\u0629 \u0642\u0635\u064A\u0631\u0629 \u0634\u0648 \u0628\u064A\u0633\u0648\u064A \u0627\u0644\u0643\u0648\u062F."
+        askGeminiForCode(prompt)
+    }
+
+    private fun askGeminiForCode(prompt: String) {
+        val jsonBody = JSONObject().apply {
+            put("contents", JSONArray().put(
+                JSONObject().apply {
+                    put("parts", JSONArray().put(
+                        JSONObject().apply { put("text", prompt) }
+                    ))
+                }
+            ))
+        }
+        val body = RequestBody.create("application/json".toMediaTypeOrNull(), jsonBody.toString())
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("x-goog-api-key", GEMINI_API_KEY)
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val responseText = response.body?.string() ?: ""
+                    val json = JSONObject(responseText)
+                    val code = json.getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+                    runOnUiThread {
+                        log("\u062C\u0627\u0631\u0641\u0633:\n${code.trim()}")
+                        tts.speak("\u0643\u062A\u0628\u062A\u0644\u0643 \u0627\u0644\u0643\u0648\u062F \u0628\u0627\u0644\u0634\u0627\u0634\u0629\u060C \u0634\u0648\u0641\u0647", TextToSpeech.QUEUE_FLUSH, null, null)
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u0647\u0645 \u0631\u062F Gemini") }
+                }
+            }
+        })
+    }
+
+    // ---------------- Holographic-style product design ----------------
+
+    private fun designHologram(description: String) {
+        if (description.isBlank()) {
+            respond("\u0642\u0644\u064A \u0648\u0635\u0641 \u0627\u0644\u0645\u0646\u062A\u062C \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u0635\u0645\u0645\u0647")
+            return
+        }
+        if (GEMINI_API_KEY.isBlank()) {
+            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0635\u0645\u0645\u0644\u0643")
+            return
+        }
+        respond("\u0628\u0635\u0645\u0645\u0644\u0643...")
+        val prompt = "\u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0647\u0627\u062F \u0627\u0644\u0648\u0635\u0641: \"$description\"\u060C \u0627\u0643\u062A\u0628\u0644\u064A \u0645\u0648\u0627\u0635\u0641\u0627\u062A \u062A\u0635\u0645\u064A\u0645 \u0645\u0646\u0638\u0645\u0629 \u0648\u0642\u0635\u064A\u0631\u0629 " +
+                "(\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u062A\u062C\u060C \u0627\u0644\u0642\u064A\u0627\u0633\u0627\u062A \u0644\u0648 \u0645\u0648\u062C\u0648\u062F\u0629\u060C \u0627\u0644\u0645\u0648\u0627\u062F \u0627\u0644\u0645\u0642\u062A\u0631\u062D\u0629\u060C \u0648\u0635\u0641 \u0645\u062E\u062A\u0635\u0631 \u0628\u062C\u0645\u0644\u062A\u064A\u0646)\u060C " +
+                "\u0628\u0634\u0643\u0644 \u0646\u0642\u0627\u0637 \u0642\u0635\u064A\u0631\u0629 \u062A\u0635\u0644\u062D \u062A\u0646\u0639\u0631\u0636 \u0628\u0634\u0627\u0634\u0629 \u0647\u0648\u0644\u0648\u062C\u0631\u0627\u0645\u064A\u0629"
+        askGeminiForHologram(prompt)
+    }
+
+    private fun askGeminiForHologram(prompt: String) {
+        val jsonBody = JSONObject().apply {
+            put("contents", JSONArray().put(
+                JSONObject().apply {
+                    put("parts", JSONArray().put(
+                        JSONObject().apply { put("text", prompt) }
+                    ))
+                }
+            ))
+        }
+        val body = RequestBody.create("application/json".toMediaTypeOrNull(), jsonBody.toString())
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("x-goog-api-key", GEMINI_API_KEY)
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val responseText = response.body?.string() ?: ""
+                    val json = JSONObject(responseText)
+                    val spec = json.getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+                    runOnUiThread {
+                        showHologramDialog(spec.trim())
+                        respond("\u0647\u0627\u0643 \u0627\u0644\u062A\u0635\u0645\u064A\u0645")
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u062C\u0647\u0632 \u0627\u0644\u062A\u0635\u0645\u064A\u0645") }
+                }
+            }
+        })
+    }
+
+    private fun showHologramDialog(specText: String) {
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+
+        val container = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#000000"))
+        }
+
+        val textView = TextView(this).apply {
+            text = specText
+            setTextColor(Color.parseColor("#00F6FF"))
+            textSize = 18f
+            typeface = Typeface.MONOSPACE
+            gravity = Gravity.CENTER
+            setPadding(60, 60, 60, 60)
+            setShadowLayer(24f, 0f, 0f, Color.parseColor("#00F6FF"))
+        }
+        val textParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.CENTER }
+        container.addView(textView, textParams)
+
+        val closeButton = Button(this).apply {
+            text = "\u2715 \u0625\u063A\u0644\u0627\u0642"
+            setTextColor(Color.parseColor("#00F6FF"))
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { dialog.dismiss() }
+        }
+        val closeParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            topMargin = 60
+            rightMargin = 40
+        }
+        container.addView(closeButton, closeParams)
+
+        dialog.setContentView(container)
+        dialog.show()
+
+        ObjectAnimator.ofFloat(textView, "rotationY", 0f, 360f).apply {
+            duration = 6000
+            repeatCount = ObjectAnimator.INFINITE
+            start()
+        }
+        ObjectAnimator.ofFloat(textView, "alpha", 1f, 0.6f).apply {
+            duration = 900
+            repeatMode = ObjectAnimator.REVERSE
+            repeatCount = ObjectAnimator.INFINITE
+            start()
+        }
+    }
+
+    // ---------------- Explain any topic (geology, etc.) via Gemini ----------------
+
+    private fun extractExplainTopic(cmd: String): String {
+        val marker = when {
+            cmd.contains("\u0627\u0634\u0631\u062D\u0644\u064A") -> "\u0627\u0634\u0631\u062D\u0644\u064A"
+            cmd.contains("\u0627\u0634\u0631\u062D \u0644\u064A") -> "\u0627\u0634\u0631\u062D \u0644\u064A"
+            cmd.contains("\u0641\u0647\u0645\u0646\u064A") -> "\u0641\u0647\u0645\u0646\u064A"
+            cmd.contains("\u0627\u0641\u062A\u062D \u0645\u0648\u0636\u0648\u0639") -> "\u0645\u0648\u0636\u0648\u0639"
+            cmd.contains("\u0634\u0648 \u0647\u0648") -> "\u0634\u0648 \u0647\u0648"
+            else -> "\u0634\u0648 \u0647\u064A"
+        }
+        return extractNameAfter(cmd, marker)
+    }
+
+    private val offlineKnowledge = mapOf(
+        "\u0627\u0644\u0627\u0633\u0644\u0627\u0645" to "\u0627\u0644\u0625\u0633\u0644\u0627\u0645 \u062F\u064A\u0646 \u062A\u0648\u062D\u064A\u062F\u064A\u060C \u0646\u0632\u0644 \u0639\u0644\u0649 \u0627\u0644\u0646\u0628\u064A \u0645\u062D\u0645\u062F \u0635\u0644\u0649 \u0627\u0644\u0644\u0647 \u0639\u0644\u064A\u0647 \u0648\u0633\u0644\u0645 \u0628\u0627\u0644\u0642\u0631\u0622\u0646 \u0627\u0644\u0643\u0631\u064A\u0645. \u0645\u0646 \u0623\u0631\u0643\u0627\u0646\u0647 \u0627\u0644\u062E\u0645\u0633\u0629: \u0627\u0644\u0634\u0647\u0627\u062F\u062A\u064A\u0646\u060C \u0627\u0644\u0635\u0644\u0627\u0629\u060C \u0627\u0644\u0632\u0643\u0627\u0629\u060C \u0627\u0644\u0635\u064A\u0627\u0645 \u0628\u0631\u0645\u0636\u0627\u0646\u060C \u0648\u0627\u0644\u062D\u062C \u0644\u0645\u0646 \u0627\u0633\u062A\u0637\u0627\u0639. \u064A\u0624\u0645\u0646 \u0627\u0644\u0645\u0633\u0644\u0645\u0648\u0646 \u0628\u0627\u0644\u0644\u0647 \u0627\u0644\u0648\u0627\u062D\u062F\u060C \u0648\u0628\u0627\u0644\u0623\u0646\u0628\u064A\u0627\u0621 \u0648\u0627\u0644\u0631\u0633\u0644 \u0645\u0646 \u0642\u0628\u0644 \u0645\u062D\u0645\u062F \u0645\u062A\u0644 \u0645\u0648\u0633\u0649 \u0648\u0639\u064A\u0633\u0649 \u0639\u0644\u064A\u0647\u0645 \u0627\u0644\u0633\u0644\u0627\u0645.",
+        "\u0627\u0644\u0645\u0633\u064A\u062D\u064A\u0629" to "\u0627\u0644\u0645\u0633\u064A\u062D\u064A\u0629 \u062F\u064A\u0646 \u062A\u0648\u062D\u064A\u062F\u064A \u064A\u0642\u0648\u0645 \u0639\u0644\u0649 \u062A\u0639\u0627\u0644\u064A\u0645 \u0627\u0644\u0633\u064A\u062F \u0627\u0644\u0645\u0633\u064A\u062D \u0639\u064A\u0633\u0649 \u0628\u0646 \u0645\u0631\u064A\u0645 \u0643\u0645\u0627 \u0648\u0631\u062F\u062A \u0628\u0627\u0644\u0625\u0646\u062C\u064A\u0644. \u0645\u0646 \u0623\u0647\u0645 \u0645\u0639\u062A\u0642\u062F\u0627\u062A\u0647\u0627 \u0641\u0643\u0631\u0629 \u0627\u0644\u062B\u0627\u0644\u0648\u062B \u0627\u0644\u0623\u0642\u062F\u0633 (\u0627\u0644\u0622\u0628 \u0648\u0627\u0644\u0627\u0628\u0646 \u0648\u0627\u0644\u0631\u0648\u062D \u0627\u0644\u0642\u062F\u0633)\u060C \u0648\u0637\u0642\u0648\u0633\u0647\u0627 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u062A\u0634\u0645\u0644 \u0627\u0644\u0645\u0639\u0645\u0648\u062F\u064A\u0629 \u0648\u0627\u0644\u0642\u0631\u0628\u0627\u0646 \u0627\u0644\u0645\u0642\u062F\u0633\u060C \u0648\u0641\u064A\u0647\u0627 \u0637\u0648\u0627\u0626\u0641 \u0643\u0628\u0631\u0649 \u0645\u062A\u0644 \u0627\u0644\u0643\u0627\u062B\u0648\u0644\u064A\u0643 \u0648\u0627\u0644\u0623\u0631\u062B\u0648\u0630\u0643\u0633 \u0648\u0627\u0644\u0628\u0631\u0648\u062A\u0633\u062A\u0627\u0646\u062A.",
+        "\u0627\u0644\u064A\u0647\u0648\u062F\u064A\u0629" to "\u0627\u0644\u064A\u0647\u0648\u062F\u064A\u0629 \u0645\u0646 \u0623\u0642\u062F\u0645 \u0627\u0644\u062F\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u0648\u062D\u064A\u062F\u064A\u0629\u060C \u0643\u062A\u0627\u0628\u0647\u0627 \u0627\u0644\u0645\u0642\u062F\u0633 \u0627\u0644\u062A\u0648\u0631\u0627\u0629 (\u0627\u0644\u0639\u0647\u062F \u0627\u0644\u0642\u062F\u064A\u0645). \u062A\u0624\u0645\u0646 \u0628\u0646\u0628\u0648\u0629 \u0645\u0648\u0633\u0649 \u0639\u0644\u064A\u0647 \u0627\u0644\u0633\u0644\u0627\u0645 \u0648\u0627\u0633\u062A\u0644\u0627\u0645\u0647 \u0627\u0644\u0648\u0635\u0627\u064A\u0627 \u0627\u0644\u0639\u0634\u0631\u060C \u0648\u0645\u0646 \u0634\u0639\u0627\u0626\u0631\u0647\u0627 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0633\u0628\u062A (\u064A\u0648\u0645 \u0627\u0644\u0631\u0627\u062D\u0629) \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0637\u0639\u0627\u0645 \u0627\u0644\u062D\u0644\u0627\u0644 \u062D\u0633\u0628 \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0627\u0644\u064A\u0647\u0648\u062F\u064A\u0629 (\u0643\u0648\u0634\u064A\u0631).",
+        "\u0627\u0644\u0628\u0648\u0630\u064A\u0629" to "\u0627\u0644\u0628\u0648\u0630\u064A\u0629 \u062F\u064A\u0627\u0646\u0629 \u0648\u0641\u0644\u0633\u0641\u0629 \u0631\u0648\u062D\u064A\u0629 \u0623\u0633\u0633\u0647\u0627 \u0633\u064A\u062F\u0647\u0627\u0631\u062A\u0627 \u063A\u0648\u062A\u0627\u0645\u0627 (\u0628\u0648\u0630\u0627) \u0628\u0627\u0644\u0647\u0646\u062F. \u062A\u0631\u0643\u0632 \u0639\u0644\u0649 \u062A\u062D\u0642\u064A\u0642 \u0627\u0644\u062A\u0646\u0648\u064A\u0631 \u0648\u0627\u0644\u062A\u062D\u0631\u0631 \u0645\u0646 \u0627\u0644\u0645\u0639\u0627\u0646\u0627\u0629 \u0639\u0646 \u0637\u0631\u064A\u0642 \u0627\u062A\u0628\u0627\u0639 \u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u062B\u0645\u0627\u0646\u064A \u0627\u0644\u0646\u0628\u064A\u0644\u060C \u0648\u062A\u0624\u0645\u0646 \u0628\u0645\u0628\u062F\u0623 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062C\u0633\u062F (\u0627\u0644\u0643\u0627\u0631\u0645\u0627).",
+        "\u0627\u0644\u0647\u0646\u062F\u0648\u0633\u064A\u0629" to "\u0627\u0644\u0647\u0646\u062F\u0648\u0633\u064A\u0629 \u0645\u0646 \u0623\u0642\u062F\u0645 \u0627\u0644\u062F\u064A\u0627\u0646\u0627\u062A \u0628\u0627\u0644\u0639\u0627\u0644\u0645\u060C \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0622\u0644\u0647\u0629 \u0648\u0641\u064A\u0647\u0627 \u0641\u0644\u0633\u0641\u0627\u062A \u0645\u062A\u0646\u0648\u0639\u0629. \u062A\u0624\u0645\u0646 \u0628\u0645\u0628\u062F\u0623 \u0627\u0644\u0643\u0627\u0631\u0645\u0627 \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062C\u0633\u062F (\u0627\u0644\u062A\u0646\u0627\u0633\u062E)\u060C \u0648\u0643\u062A\u0628\u0647\u0627 \u0627\u0644\u0645\u0642\u062F\u0633\u0629 \u062A\u0634\u0645\u0644 \u0627\u0644\u0641\u064A\u062F\u0627 \u0648\u0627\u0644\u0628\u0647\u0627\u063A\u0627\u0641\u0627\u062F\u063A\u064A\u062A\u0627\u060C \u0648\u0623\u0647\u0645 \u0622\u0644\u0647\u062A\u0647\u0627 \u0628\u0631\u0627\u0647\u0645\u0627 \u0648\u0641\u064A\u0634\u0646\u0648 \u0648\u0634\u064A\u0641\u0627."
+    )
+
+    private fun explainTopic(topic: String) {
+        if (topic.isBlank()) {
+            respond("\u0642\u0644\u064A \u0634\u0648 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u064A\u0644\u064A \u0628\u062F\u0643 \u0623\u0634\u0631\u062D\u0644\u0643 \u064A\u0627\u0647")
+            return
+        }
+
+        val offlineMatch = offlineKnowledge.entries.firstOrNull { topic.contains(it.key) }
+        if (offlineMatch != null) {
+            respond(offlineMatch.value)
+            return
+        }
+
+        if (GEMINI_API_KEY.isBlank()) {
+            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0634\u0631\u062D\u0644\u0643 \u0645\u0648\u0627\u0636\u064A\u0639 \u0632\u064A\u0627\u062F\u0629")
+            return
+        }
+        respond("\u062E\u0644\u064A\u0646\u064A \u0623\u0634\u0631\u062D\u0644\u0643...")
+        val prompt = "\u0627\u0634\u0631\u062D\u0644\u064A \u0645\u0648\u0636\u0648\u0639 \"$topic\" \u0628\u0637\u0631\u064A\u0642\u0629 \u0633\u0647\u0644\u0629 \u0648\u0645\u0628\u0633\u0637\u0629 \u0645\u0639 \u0645\u062B\u0627\u0644 \u0625\u0630\u0627 \u0623\u0645\u0643\u0646\u060C \u0628\u0623\u0633\u0644\u0648\u0628 \u0642\u0631\u064A\u0628 \u0648\u0645\u0641\u0647\u0648\u0645"
+        askGemini(prompt)
+    }
+
+    // ---------------- Unit converter ----------------
+
+    private fun convertUnits(cmd: String): String {
+        val numberRegex = Regex("""(\d+(?:\.\d+)?)""")
+        val match = numberRegex.find(cmd) ?: return "\u0642\u0644\u064A \u0627\u0644\u0631\u0642\u0645 \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u062D\u0648\u0644\u0647"
+        val value = match.groupValues[1].toDouble()
+
+        return when {
+            cmd.contains("\u0643\u064A\u0644\u0648\u0645\u062A\u0631") && cmd.contains("\u0645\u064A\u0644") -> {
+                val miles = value * 0.621371
+                "${value} \u0643\u0645 \u064A\u0633\u0627\u0648\u064A \u062A\u0642\u0631\u064A\u0628\u064B\u0627 ${"%.2f".format(miles)} \u0645\u064A\u0644"
+            }
+            cmd.contains("\u0643\u064A\u0644\u0648") && cmd.contains("\u0628\u0627\u0648\u0646\u062F") -> {
+                val pounds = value * 2.20462
+                "${value} \u0643\u064A\u0644\u0648 \u064A\u0633\u0627\u0648\u064A \u062A\u0642\u0631\u064A\u0628\u064B\u0627 ${"%.2f".format(pounds)} \u0628\u0627\u0648\u0646\u062F"
+            }
+            cmd.contains("\u0645\u0626\u0648\u064A\u0629") && cmd.contains("\u0641\u0647\u0631\u0646\u0647\u0627\u064A\u062A") -> {
+                val fahrenheit = (value * 9 / 5) + 32
+                "${value} \u062F\u0631\u062C\u0629 \u0645\u0626\u0648\u064A\u0629 \u064A\u0633\u0627\u0648\u064A ${"%.1f".format(fahrenheit)} \u0641\u0647\u0631\u0646\u0647\u0627\u064A\u062A"
+            }
+            else -> "\u0642\u0644\u064A \u0627\u0644\u062A\u062D\u0648\u064A\u0644 \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u062D\u0648\u0644 10 \u0643\u064A\u0644\u0648\u0645\u062A\u0631 \u0627\u0644\u0649 \u0645\u064A\u0644"
+        }
+    }
+
+    // ---------------- Fun facts ----------------
+
+    private val funFacts = listOf(
+        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0635\u062D\u0631\u0627\u0621 \u0627\u0644\u062C\u0632\u0627\u0626\u0631 (\u0627\u0644\u0635\u062D\u0631\u0627\u0621 \u0627\u0644\u0643\u0628\u0631\u0649) \u062A\u063A\u0637\u064A \u0623\u0643\u062A\u0631 \u0645\u0646 80% \u0645\u0646 \u0645\u0633\u0627\u062D\u0629 \u0627\u0644\u0628\u0644\u0627\u062F.",
+        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0639\u0633\u0644 \u0645\u0627 \u064A\u0641\u0633\u062F\u0634 \u0623\u0628\u062F\u064B\u0627\u060C \u062D\u062A\u0649 \u0628\u0639\u062F \u0622\u0644\u0627\u0641 \u0627\u0644\u0633\u0646\u064A\u0646.",
+        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0642\u0644\u0628 \u0627\u0644\u0628\u0634\u0631\u064A \u064A\u062F\u0642 \u062D\u0648\u0627\u0644\u064A 100 \u0623\u0644\u0641 \u0645\u0631\u0629 \u0628\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0648\u0627\u062D\u062F.",
+        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0623\u062E\u0637\u0628\u0648\u0637 \u0639\u0646\u062F\u0647 \u062B\u0644\u0627\u062B\u0629 \u0642\u0644\u0648\u0628 \u0648\u062F\u0645\u0647 \u0644\u0648\u0646\u0647 \u0623\u0632\u0631\u0642.",
+        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0636\u0648\u0621 \u0645\u0646 \u0627\u0644\u0634\u0645\u0633 \u064A\u0648\u0635\u0644 \u0644\u0644\u0623\u0631\u0636 \u0628\u062D\u0648\u0627\u0644\u064A 8 \u062F\u0642\u0627\u064A\u0642 \u0628\u0633.",
+        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u062C\u0628\u0644 \u0637\u0648\u0628\u0642\u0627\u0644 \u0628\u0627\u0644\u0645\u063A\u0631\u0628 \u0647\u0648 \u0623\u0639\u0644\u0649 \u0642\u0645\u0629 \u0628\u0634\u0645\u0627\u0644 \u0623\u0641\u0631\u064A\u0642\u064A\u0627."
+    )
+
+    // ---------------- Suggestions ----------------
+
+    private fun suggestDrawing(): String {
+        val ideas = listOf(
+            "\u0627\u0631\u0633\u0645 \u0645\u0646\u0638\u0631 \u0637\u0628\u064A\u0639\u064A \u0641\u064A\u0647 \u062C\u0628\u0627\u0644 \u0648\u0628\u062D\u0631",
+            "\u062C\u0631\u0628 \u062A\u0631\u0633\u0645 \u0628\u0648\u0631\u062A\u0631\u064A\u0647 \u0644\u0634\u062E\u0635 \u0642\u0631\u064A\u0628 \u0645\u0646\u0643",
+            "\u0627\u0631\u0633\u0645 \u062D\u064A\u0648\u0627\u0646 \u0623\u0644\u064A\u0641 \u0628\u0623\u0633\u0644\u0648\u0628 \u0643\u0631\u062A\u0648\u0646\u064A",
+            "\u062C\u0631\u0628 \u0631\u0633\u0645 \u0645\u062F\u064A\u0646\u0629 \u062E\u064A\u0627\u0644\u064A\u0629 \u0645\u0646 \u062E\u064A\u0627\u0644\u0643",
+            "\u0627\u0631\u0633\u0645 \u0644\u0648\u062D\u0629 \u062A\u062C\u0631\u064A\u062F\u064A\u0629 \u0628\u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u064A\u0644\u064A \u0628\u062A\u062D\u0628\u0647\u0627"
+        )
+        return "\u0641\u0643\u0631\u0629 \u0631\u0633\u0645\u0629 \u0627\u0644\u064A\u0648\u0645: ${ideas.random()}"
+    }
+
+    private fun suggestBreakfast(): String {
+        val ideas = listOf(
+            "\u0628\u064A\u0636 \u0645\u0639 \u0632\u0639\u062A\u0631 \u0648\u0632\u064A\u062A \u0632\u064A\u062A\u0648\u0646 \u0648\u062E\u0628\u0632 \u0637\u0627\u0632\u0629",
+            "\u0641\u0648\u0644 \u0645\u062F\u0645\u0633 \u0645\u0639 \u062E\u0636\u0631\u0629 \u0648\u0644\u064A\u0645\u0648\u0646",
+            "\u0644\u0628\u0646\u0629 \u0645\u0639 \u062E\u064A\u0627\u0631 \u0648\u0637\u0645\u0627\u0637\u0645",
+            "\u0645\u0646\u0627\u0642\u064A\u0634 \u0632\u0639\u062A\u0631 \u0623\u0648 \u062C\u0628\u0646\u0629",
+            "\u0634\u0643\u0634\u0648\u0643\u0629 \u0628\u0627\u0644\u0628\u064A\u0636 \u0648\u0627\u0644\u0628\u0646\u062F\u0648\u0631\u0629"
+        )
+        return "\u0627\u0642\u062A\u0631\u0627\u062D \u0641\u0637\u0648\u0631 \u0627\u0644\u064A\u0648\u0645: ${ideas.random()}"
+    }
+
+    // ---------------- Distance between cities ----------------
+    // \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062F\u0646 \u0627\u0646\u062A\u0642\u0644\u062A \u0644\u0645\u0644\u0641 CityCoordinates.kt \u0645\u0646\u0641\u0635\u0644 (\u0644\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0643\u0648\u062F)
+
+    private fun handleDistanceQuery(cmd: String) {
+        val regex = Regex("""\u0645\u0646\s+(\S+)\s+(?:\u0627\u0644\u0649|\u0625\u0644\u0649)\s+(\S+)""")
+        val match = regex.find(cmd)
+        if (match == null) {
+            respond("\u0642\u0644\u064A \u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u0643\u0645 \u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 \u062F\u0645\u0634\u0642 \u0627\u0644\u0649 \u062D\u0644\u0628")
+            return
+        }
+        val cityA = match.groupValues[1]
+        val cityB = match.groupValues[2]
+
+        if (GOOGLE_MAPS_API_KEY.isNotBlank()) {
+            respond("\u0628\u062D\u0633\u0628...")
+            askGoogleDistance(cityA, cityB)
+        } else {
+            respond(calculateDistanceOffline(cityA, cityB))
+        }
+    }
+
+    private fun askGoogleDistance(cityA: String, cityB: String) {
+        val originEnc = java.net.URLEncoder.encode(cityA, "UTF-8")
+        val destEnc = java.net.URLEncoder.encode(cityB, "UTF-8")
+        val url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
+                "?origins=$originEnc&destinations=$destEnc&key=$GOOGLE_MAPS_API_KEY"
+        val request = Request.Builder().url(url).get().build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val responseText = response.body?.string() ?: ""
+                    val json = JSONObject(responseText)
+                    val status = json.optString("status")
+                    if (status != "OK") {
+                        runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
+                        return
+                    }
+                    val element = json.getJSONArray("rows")
+                        .getJSONObject(0)
+                        .getJSONArray("elements")
+                        .getJSONObject(0)
+                    val elementStatus = element.optString("status")
+                    if (elementStatus != "OK") {
+                        runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
+                        return
+                    }
+                    val distanceText = element.getJSONObject("distance").getString("text")
+                    val durationText = element.getJSONObject("duration").getString("text")
+                    runOnUiThread {
+                        respond("\u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 $cityA \u0627\u0644\u0649 $cityB \u062D\u0648\u0627\u0644\u064A $distanceText \u0628\u0627\u0644\u0633\u064A\u0627\u0631\u0629\u060C \u0648\u0648\u0642\u062A \u0627\u0644\u0631\u062D\u0644\u0629 \u062A\u0642\u0631\u064A\u0628\u064B\u0627 $durationText")
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
+                }
+            }
+        })
+    }
+
+    private fun calculateDistanceOffline(cityA: String, cityB: String): String {
+        val coordA = CityCoordinates.coordinates[cityA]
+        val coordB = CityCoordinates.coordinates[cityB]
+        if (coordA == null || coordB == null) {
+            return "\u0644\u0644\u0623\u0633\u0641 \u0645\u0627 \u0639\u0646\u062F\u064A \u0625\u062D\u062F\u0627\u062B\u064A\u0627\u062A \u0644\u0647\u0627\u064A \u0627\u0644\u0645\u062F\u064A\u0646\u0629 \u062D\u0627\u0644\u064A\u064B\u0627"
+        }
+        val distanceKm = haversine(coordA.first, coordA.second, coordB.first, coordB.second)
+        return "\u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 $cityA \u0627\u0644\u0649 $cityB \u062D\u0648\u0627\u0644\u064A ${distanceKm.toInt()} \u0643\u0645 (\u062E\u0637 \u0645\u0633\u062A\u0642\u064A\u0645 \u062A\u0642\u0631\u064A\u0628\u064A)"
+    }
+
+    private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val earthRadiusKm = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2).pow(2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return earthRadiusKm * c
+    }
+
+    // ---------------- Output helpers ----------------
+
+    private fun respond(text: String) {
+        log("\u062C\u0627\u0631\u0641\u0633: $text")
+        speechRecognizer?.stopListening()
+        val utteranceId = "jarvis_${System.currentTimeMillis()}"
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+    }
+
+    private fun log(text: String) {
+        logText.append("\n\n$text")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        tts.shutdown()
+        stopMusic()
+        speechRecognizer?.destroy()
+    }
+}
