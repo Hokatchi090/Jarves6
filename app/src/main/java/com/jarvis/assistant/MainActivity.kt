@@ -50,6 +50,31 @@ import org.json.JSONObject
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
+    // Helper functions for responses
+private fun respond(message: String) {
+    // عرض الرسالة في واجهة التطبيق (TextView أو Toast)
+    // نفترض وجود textView أو snackbar
+    runOnUiThread {
+        // مثال: Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        // أو تحديث نص في واجهة المستخدم
+        binding?.tvResponse?.text = message
+    }
+}
+
+private fun saveNote(content: String) {
+    // حفظ الملاحظة في SharedPreferences أو ملف
+    val prefs = getSharedPreferences("JarvisNotes", MODE_PRIVATE)
+    prefs.edit().putString("note_${System.currentTimeMillis()}", content).apply()
+}
+
+private fun extractNameAfter(text: String, keyword: String): String? {
+    // استخراج النص بعد الكلمة المفتاحية
+    val index = text.indexOf(keyword, ignoreCase = true)
+    return if (index != -1) {
+        text.substring(index + keyword.length).trim().takeIf { it.isNotEmpty() }
+    } else null
+}
+
     private lateinit var tts: TextToSpeech
     private lateinit var logText: TextView
     private lateinit var statusText: TextView
