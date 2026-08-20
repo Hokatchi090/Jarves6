@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
     private val client = OkHttpClient()
+    private val playlistManager by lazy { PlaylistManager(this) }
 
     // ---- \u0636\u064A\u0641 \u0645\u0641\u062A\u0627\u062D Google Gemini \u0627\u0644\u062E\u0627\u0635 \u0641\u064A\u0643 \u0647\u0648\u0646 \u0628\u064A\u0646 \u0639\u0644\u0627\u0645\u062A\u064A \u0627\u0644\u062A\u0646\u0635\u064A\u0635 ----
     // \u0627\u062D\u0635\u0644 \u0639\u0644\u064A\u0647 \u0645\u062C\u0627\u0646\u064B\u0627 \u0645\u0646: https://aistudio.google.com/apikey
@@ -343,6 +344,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         try {
             handleCommandInternal(text)
         } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u062F\u0627\u062E\u0644\u064A: ${e.message}")
             respond("\u0645\u0627 \u0641\u0647\u0645\u062A\u0634")
         }
     }
@@ -778,6 +780,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         .getString("text")
                     runOnUiThread { respond(reply.trim()) }
                 } catch (e: Exception) {
+                    log("\u062E\u0637\u0623 Gemini: ${e.message}")
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u0647\u0645 \u0631\u062F Gemini") }
                 }
             }
@@ -799,21 +802,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             addToPlaylistAndSetCurrent(name)
             respond("\u0647\u0627\u0643\u0647\u0627 $name")
         } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u062A\u0634\u063A\u064A\u0644 \u0623\u063A\u0646\u064A\u0629: ${e.message}")
             respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u062A\u0637\u0628\u064A\u0642 \u0645\u0648\u0633\u064A\u0642\u0649 \u064A\u0641\u0647\u0645 \u0647\u0627\u0644\u0623\u0645\u0631 \u0639\u0646\u062F\u0643")
         }
     }
 
     private fun playNextInPlaylist() {
-        val list = getPlaylist()
+        val list = playlistManager.getPlaylist()
         if (list.isEmpty()) {
             respond("\u0645\u0627 \u0639\u0646\u062F\u0643 \u0623\u063A\u0627\u0646\u064A \u0628\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0644\u0633\u0627")
             return
         }
-        var index = getCurrentIndex() + 1
+        var index = playlistManager.getCurrentIndex() + 1
         if (index >= list.size) {
             index = list.size - 1
         }
-        setCurrentIndex(index)
+        playlistManager.setCurrentIndex(index)
         val song = list[index]
         try {
             val intent = Intent("android.media.action.MEDIA_PLAY_FROM_SEARCH")
@@ -822,6 +826,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             startActivity(intent)
             respond("\u0647\u0627\u0643\u0647\u0627 $song")
         } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062A\u0627\u0644\u064A: ${e.message}")
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0634\u063A\u0644 \u0627\u0644\u0623\u063A\u0646\u064A\u0629")
         }
     }
@@ -831,56 +836,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0642\u0644\u064A \u0627\u0633\u0645 \u0627\u0644\u0623\u063A\u0646\u064A\u0629 \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u0636\u064A\u0641\u0647\u0627")
             return
         }
-        val list = getPlaylist()
-        if (!list.contains(name)) {
-            list.add(name)
-            savePlaylist(list)
-        }
+        playlistManager.addSong(name)
         respond("\u0636\u0641\u062A $name \u0644\u0644\u0642\u0627\u0626\u0645\u0629")
     }
 
     private fun showPlaylist(): String {
-        val list = getPlaylist()
+        val list = playlistManager.getPlaylist()
         if (list.isEmpty()) return "\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0641\u0627\u0636\u064A\u0629 \u0644\u0633\u0627"
         return "\u0642\u0627\u0626\u0645\u062A\u0643: " + list.joinToString("\u060C ")
     }
 
     private fun clearPlaylist() {
-        savePlaylist(emptyList())
-        setCurrentIndex(-1)
+        playlistManager.clear()
         respond("\u0645\u0633\u062D\u062A \u0627\u0644\u0642\u0627\u0626\u0645\u0629")
     }
 
     private fun addToPlaylistAndSetCurrent(name: String) {
-        val list = getPlaylist()
-        var index = list.indexOf(name)
-        if (index == -1) {
-            list.add(name)
-            index = list.size - 1
-            savePlaylist(list)
-        }
-        setCurrentIndex(index)
-    }
-
-    private fun getPlaylist(): MutableList<String> {
-        val raw = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("playlist", "") ?: ""
-        return if (raw.isBlank()) mutableListOf() else raw.split("||").toMutableList()
-    }
-
-    private fun savePlaylist(list: List<String>) {
-        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
-            .putString("playlist", list.joinToString("||")).apply()
-    }
-
-    private fun getCurrentIndex(): Int {
-        return getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getInt("playlist_index", -1)
-    }
-
-    private fun setCurrentIndex(index: Int) {
-        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
-            .putInt("playlist_index", index).apply()
+        playlistManager.addAndSetCurrent(name)
     }
 
     // ---------------- Lecture mode ----------------
@@ -920,7 +892,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             ))
         }
-        val body = RequestBody.create("application/json".toMediaTypeOrNull(), jsonBody.toString())
+        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
         val request = Request.Builder()
             .url(url)
@@ -1052,6 +1024,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             startActivity(intent)
             respond("\u062A\u0645\u0627\u0645\u060C \u062D\u0637\u064A\u062A \u0645\u0646\u0628\u0647 \u0627\u0644\u0633\u0627\u0639\u0629 $hour \u0648 $minute")
         } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u0627\u0644\u0645\u0646\u0628\u0647: ${e.message}")
             respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u062A\u0637\u0628\u064A\u0642 \u0645\u0646\u0628\u0647 \u0639\u0644\u0649 \u0647\u0627\u062A\u0641\u0643")
         }
     }
@@ -1249,7 +1222,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             ))
         }
-        val body = RequestBody.create("application/json".toMediaTypeOrNull(), jsonBody.toString())
+        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
         val request = Request.Builder()
             .url(url)
@@ -1278,6 +1251,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         tts.speak("\u0643\u062A\u0628\u062A\u0644\u0643 \u0627\u0644\u0643\u0648\u062F \u0628\u0627\u0644\u0634\u0627\u0634\u0629\u060C \u0634\u0648\u0641\u0647", TextToSpeech.QUEUE_FLUSH, null, null)
                     }
                 } catch (e: Exception) {
+                    log("\u062E\u0637\u0623 Gemini: ${e.message}")
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u0647\u0645 \u0631\u062F Gemini") }
                 }
             }
@@ -1312,7 +1286,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             ))
         }
-        val body = RequestBody.create("application/json".toMediaTypeOrNull(), jsonBody.toString())
+        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
         val request = Request.Builder()
             .url(url)
@@ -1341,6 +1315,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         respond("\u0647\u0627\u0643 \u0627\u0644\u062A\u0635\u0645\u064A\u0645")
                     }
                 } catch (e: Exception) {
+                    log("\u062E\u0637\u0623 \u0627\u0644\u062A\u0635\u0645\u064A\u0645: ${e.message}")
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u062C\u0647\u0632 \u0627\u0644\u062A\u0635\u0645\u064A\u0645") }
                 }
             }
