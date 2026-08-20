@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var flashOn = false
     private var continuousMode = false
     private var speechRecognizer: SpeechRecognizer? = null
-    private var currentLangCode = "ar"
+    private var currentLangCode = "en"
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
     private var userName: String = ""
@@ -68,12 +68,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // ---- \u0636\u064A\u0641 \u0645\u0641\u062A\u0627\u062D Google Gemini \u0627\u0644\u062E\u0627\u0635 \u0641\u064A\u0643 \u0647\u0648\u0646 \u0628\u064A\u0646 \u0639\u0644\u0627\u0645\u062A\u064A \u0627\u0644\u062A\u0646\u0635\u064A\u0635 ----
     // \u0627\u062D\u0635\u0644 \u0639\u0644\u064A\u0647 \u0645\u062C\u0627\u0646\u064B\u0627 \u0645\u0646: https://aistudio.google.com/apikey
     // \u062E\u0644\u064A\u0647 \u0641\u0627\u0636\u064A "" \u0625\u0630\u0627 \u0628\u062F\u0643 \u062A\u0628\u0642\u064A \u062C\u0627\u0631\u0641\u0633 \u0623\u0648\u0641\u0644\u0627\u064A\u0646 \u0628\u0627\u0644\u0643\u0627\u0645\u0644
-    private val GEMINI_API_KEY = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
+    private val GEMINI_API_KEY = ""
 
     // ---- \u0636\u064A\u0641 \u0645\u0641\u062A\u0627\u062D Google Maps \u0647\u0648\u0646 \u0644\u0645\u0633\u0627\u0641\u0627\u062A \u062D\u0642\u064A\u0642\u064A\u0629 \u0628\u0627\u0644\u0637\u0631\u064A\u0642 ----
     // \u0627\u062D\u0635\u0644 \u0639\u0644\u064A\u0647 \u0645\u0646: https://console.cloud.google.com/google/maps-apis
     // \u062E\u0644\u064A\u0647 \u0641\u0627\u0636\u064A "" \u0625\u0630\u0627 \u0628\u062F\u0643 \u064A\u0633\u062A\u062E\u062F\u0645 \u062D\u0633\u0627\u0628 \u062A\u0642\u0631\u064A\u0628\u064A (\u062E\u0637 \u0645\u0633\u062A\u0642\u064A\u0645) \u0628\u062F\u0648\u0646 \u0645\u0641\u062A\u0627\u062D
-    private val GOOGLE_MAPS_API_KEY = ""
+    private val GOOGLE_MAPS_API_KEY = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
 
     companion object {
         private const val REQ_SPEECH = 100
@@ -165,11 +165,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts.language = Locale("ar")
+            tts.language = Locale.ENGLISH
             tts.setPitch(0.6f)
             tts.setSpeechRate(0.88f)
-            val arabicVoices = tts.voices?.filter { it.locale.language == "ar" }
-            val maleVoice = arabicVoices?.firstOrNull { voice ->
+            val englishVoices = tts.voices?.filter { it.locale.language == "en" }
+            val maleVoice = englishVoices?.firstOrNull { voice ->
                 val n = voice.name.lowercase(Locale.ROOT)
                 (n.contains("male") && !n.contains("female")) ||
                         n.contains("-d-") || n.contains("#male")
@@ -206,9 +206,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             })
 
             val greeting = if (userName.isNotBlank()) {
-                "\u0623\u0647\u0644\u0627 ${userName}\u060C \u0623\u0646\u0627 \u062C\u0627\u0631\u0641\u0633 \u062A\u062D\u062A \u0627\u0644\u062E\u062F\u0645\u0629\u060C \u0634\u0648 \u0627\u0644\u062E\u062F\u0645\u0629 \u0627\u0644\u064A\u0648\u0645\u061F"
+                "Hello $userName, Jarvis at your service, what can I do today?"
             } else {
-                "\u0623\u0646\u0627 \u062C\u0627\u0631\u0641\u0633 \u062A\u062D\u062A \u0627\u0644\u062E\u062F\u0645\u0629\u060C \u0634\u0648 \u0627\u0644\u062E\u062F\u0645\u0629 \u0627\u0644\u064A\u0648\u0645\u061F"
+                "Jarvis at your service, what can I do today?"
             }
             respond(greeting)
         }
@@ -733,10 +733,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun askGemini(message: String) {
-        val nameContext = if (userName.isNotBlank()) "\u0627\u0633\u0645\u064A ${userName}\u060C \u062E\u0627\u0637\u0628\u0646\u064A \u0628\u0627\u0633\u0645\u064A \u0623\u062D\u064A\u0627\u0646\u064B\u0627. " else ""
-        val identityContext = "\u0623\u0646\u062A \u062C\u0627\u0631\u0641\u0633\u060C \u0645\u0633\u0627\u0639\u062F \u0634\u062E\u0635\u064A \u0628\u0634\u062E\u0635\u064A\u0629 \u0648\u0627\u062D\u062F\u0629 \u0645\u0648\u062D\u062F\u0629 \u0628\u0643\u0644 \u0627\u0644\u0644\u063A\u0627\u062A. "
-        val languageRule = "\u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0644\u063A\u0629: \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0633\u0624\u0627\u0644 \u0645\u062E\u0644\u0648\u0637 \u0628\u064A\u0646 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0648\u0644\u063A\u0629 \u062A\u0627\u0646\u064A\u0629 (\u0645\u062A\u0644 \u0639\u0631\u0628\u064A \u0645\u0639 \u0625\u0646\u062C\u0644\u064A\u0632\u064A \u0623\u0648 \u0641\u0631\u0646\u0633\u0627\u0648\u064A)\u060C \u062C\u0627\u0648\u0628 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0628\u0633. \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0633\u0624\u0627\u0644 \u0628\u0644\u063A\u0629 \u0648\u062D\u062F\u0629 \u0635\u0627\u0641\u064A\u0629 \u0628\u062F\u0648\u0646 \u062E\u0644\u0637\u060C \u062C\u0627\u0648\u0628 \u0628\u0646\u0641\u0633 \u0647\u0627\u064A \u0627\u0644\u0644\u063A\u0629. "
-        val styleRule = "\u062C\u0627\u0648\u0628\u0646\u064A \u0628\u0627\u0644\u0644\u0647\u062C\u0629 \u0627\u0644\u062C\u0632\u0627\u0626\u0631\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u064A\u0629 \u0627\u0644\u0637\u0628\u064A\u0639\u064A\u0629\u060C \u0628\u062C\u0645\u0644 \u0642\u0635\u064A\u0631\u0629 \u0648\u0648\u0627\u0636\u062D\u0629 \u0648\u0628\u0633\u064A\u0637\u0629\u060C \u0628\u062F\u0648\u0646 \u062A\u0639\u0642\u064A\u062F \u0648\u0644\u0627 \u0631\u0633\u0645\u064A\u0627\u062A \u0632\u0627\u064A\u062F\u0629\u060C \u0648\u0628\u062F\u0648\u0646 \u0643\u0644\u0645\u0627\u062A \u0641\u0635\u062D\u0649 \u0635\u0639\u0628\u0629. "
+        val nameContext = if (userName.isNotBlank()) "My name is ${userName}, address me by name occasionally. " else ""
+        val identityContext = "You are Jarvis, a personal assistant with one consistent personality across all languages. "
+        val languageRule = "Language rule: respond in the same language the user's message is written in. If the message mixes English with another language, reply in English. If it's a single language, clean, with no mixing, reply in that same language. When there is no clear signal, default to English. "
+        val styleRule = "Keep your answers short, clear, and simple, in a natural conversational tone, without being overly formal or robotic. "
         val promptWithStyle = "$identityContext$languageRule$styleRule$nameContext$message"
 
         val jsonBody = JSONObject().apply {
