@@ -62,6 +62,9 @@ class JarvisDialView @JvmOverloads constructor(
     private var installedAppNames = emptyList<String>()
     private var appClickListener: ((String) -> Unit)? = null
 
+    // \u0627\u0644\u0645\u0633\u062A\u0645\u0639: \u064A\u0646\u0627\u062F\u0649 \u0628\u0627\u0633\u0645 \u0627\u0644\u0632\u0631 (APPS/SYS/MAP/3D/CLK) \u0645\u0644\u064A \u064A\u0636\u063A\u0637 \u0627\u0644\u0645\u0633\u062A\u0639\u0645\u0644 \u0639\u0644\u0649 \u0648\u0627\u062D\u062F \u0641\u064A\u0647\u0645
+    private var moduleClickListener: ((String) -> Unit)? = null
+
     private val modulePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
     }
@@ -133,6 +136,11 @@ class JarvisDialView @JvmOverloads constructor(
 
     fun setAppClickListener(listener: (String) -> Unit) {
         appClickListener = listener
+    }
+
+    // \u064A\u062E\u0632\u0651\u0646 \u0627\u0644\u0643\u0648\u0644\u0628\u0627\u0643 \u0644\u064A\u0633\u062A\u062F\u0639\u064A\u0647 MainActivity \u0645\u0644\u064A \u064A\u0636\u063A\u0637 \u0627\u0644\u0645\u0633\u062A\u0639\u0645\u0644 \u0639\u0644\u0649 \u0632\u0631 \u0641\u064A \u0627\u0644\u0645\u0646\u064A\u0648 \u0627\u0644\u062F\u0627\u0626\u0631\u064A
+    fun setModuleClickListener(listener: (String) -> Unit) {
+        moduleClickListener = listener
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -560,8 +568,27 @@ class JarvisDialView @JvmOverloads constructor(
         }
 
         if (moduleMenuVisible) {
+            // \u0627\u0644\u0625\u0635\u0644\u0627\u062D: \u0646\u062A\u0623\u0643\u062F \u0648\u0627\u062D\u062F \u0648\u0627\u062D\u062F \u0645\u0646 \u0623\u0632\u0631\u0627\u0631 \u0627\u0644\u0645\u0646\u064A\u0648 (APPS/SYS/MAP/3D/CLK) \u0648\u0627\u0634 \u0641\u064A\u0647\u0645
+            // \u0644\u0648 \u0627\u0644\u0636\u063A\u0637\u0629 \u062F\u0627\u062E\u0644 \u062F\u0627\u0626\u0631\u0629 \u0627\u0644\u0632\u0631\u060C \u0642\u0628\u0644 \u0645\u0627 \u0646\u0633\u0643\u0631\u0648 \u0628\u0644\u0627 \u0645\u0627 \u0646\u062F\u064A\u0631\u0648 \u062D\u062A\u0649 \u0634\u064A\u0621
+            val hitRadius = base * 0.24f
+            var moduleHit: String? = null
+
+            moduleMenuPositions(cx, cy, base).forEach { (label, x, y) ->
+                val dx = event.x - x
+                val dy = event.y - y
+                val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+                if (distance <= hitRadius) {
+                    moduleHit = label
+                }
+            }
+
             moduleMenuVisible = false
             invalidate()
+
+            if (moduleHit != null) {
+                moduleClickListener?.invoke(moduleHit!!)
+            }
+
             performClick()
             return true
         }
