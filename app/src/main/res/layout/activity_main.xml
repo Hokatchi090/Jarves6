@@ -58,6 +58,7 @@
 
     <!-- Left sidebar navigation -->
     <LinearLayout
+        android:id="@+id/sidebarNav"
         android:layout_width="64dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
@@ -141,6 +142,7 @@
 
     <!-- Content area (to the right of sidebar, below top bar) -->
     <FrameLayout
+        android:id="@+id/contentArea"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginStart="64dp"
@@ -244,13 +246,16 @@
                 android:letterSpacing="0.1" />
 
             <TextView
+                android:id="@+id/labOpenButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="\u0642\u0648\u0644 \u0628\u0635\u0648\u062A\u0643: \u062C\u0627\u0631\u0641\u0633 \u0635\u0645\u0645\u0644\u064A ..."
+                android:text="\u0642\u0648\u0644 \u0628\u0635\u0648\u062A\u0643: \u062C\u0627\u0631\u0641\u0633 \u0635\u0645\u0645\u0644\u064A ... (\u0623\u0648 \u0627\u0636\u063A\u0637 \u0647\u0646\u0627 \u0644\u0641\u062A\u062D DESIGN LAB)"
                 android:textColor="#5C7A82"
                 android:textSize="10sp"
-                android:fontFamily="monospace" />
+                android:fontFamily="monospace"
+                android:clickable="true"
+                android:focusable="true" />
 
             <ScrollView
                 android:layout_width="match_parent"
@@ -430,5 +435,21 @@
         </LinearLayout>
 
     </FrameLayout>
+
+    <!-- Small circular button that toggles the sidebar's visibility.
+         Placed last so it always renders on top of both the top bar and the sidebar. -->
+    <TextView
+        android:id="@+id/sidebarToggle"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="17dp"
+        android:layout_marginTop="7dp"
+        android:gravity="center"
+        android:text="\u2261"
+        android:textColor="#8DEFFF"
+        android:textSize="15sp"
+        android:clickable="true"
+        android:focusable="true" />
 
 </FrameLayout>
