@@ -22,7 +22,8 @@
         android:allowBackup="true"
         android:label="Jarvis"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
-
+<activity android:name=".DesignLabActivity" android:exported="false" />
+  
         <activity
             android:name=".MainActivity"
             android:exported="true">
