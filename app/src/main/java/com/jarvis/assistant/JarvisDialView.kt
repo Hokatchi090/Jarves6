@@ -233,7 +233,7 @@ class JarvisDialView @JvmOverloads constructor(
     }
 
     private fun drawOuterHud(canvas: Canvas, cx: Float, cy: Float, base: Float) {
-        val radius = base * 1.72f
+        val radius = base * 1.55f
 
         ringPaint.color = cyan
         ringPaint.alpha = 75
@@ -314,8 +314,8 @@ class JarvisDialView @JvmOverloads constructor(
     }
 
     private fun drawRadialTicks(canvas: Canvas, cx: Float, cy: Float, base: Float) {
-        val inner = base * 1.40f
-        val outer = base * 1.57f
+        val inner = base * 1.32f
+        val outer = base * 1.48f
 
         for (i in 0 until 72) {
             val angle = Math.toRadians(i * 5.0)
