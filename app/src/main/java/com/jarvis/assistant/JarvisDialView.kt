@@ -71,6 +71,18 @@ class JarvisDialView @JvmOverloads constructor(
     private var listening = false
     private var hudState = JarvisHudState.READY
 
+    // \u0644\u0648\u0642\u0641/\u0627\u0633\u062A\u0626\u0646\u0627\u0641 \u062D\u0644\u0642\u0627\u062A HUD \u0627\u0644\u0645\u062A\u062D\u0631\u0643\u0629 (\u064A\u0648\u0641\u0631 \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629 \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0641\u064A \u0627\u0644\u062E\u0644\u0641\u064A\u0629)
+    private var animationPaused = false
+
+    fun pauseAnimation() {
+        animationPaused = true
+    }
+
+    fun resumeAnimation() {
+        animationPaused = false
+        invalidate()
+    }
+
     private data class Particle(
         var x: Float,
         var y: Float,
@@ -170,7 +182,9 @@ class JarvisDialView @JvmOverloads constructor(
             drawAddButton(canvas, cx, cy, base)
         }
 
-        postInvalidateOnAnimation()
+        if (!animationPaused) {
+            postInvalidateOnAnimation()
+        }
     }
 
     private fun drawAmbientGlow(canvas: Canvas, cx: Float, cy: Float, base: Float) {
