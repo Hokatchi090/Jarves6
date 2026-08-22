@@ -10,7 +10,6 @@
     background: transparent; overflow: hidden;
   }
 
-  /* \u0627\u0644\u062D\u0627\u0648\u064A\u0629 \u0627\u0644\u062F\u0627\u0626\u0631\u064A\u0629 \u0627\u0644\u062E\u0627\u0631\u062C\u064A\u0629: \u062A\u062D\u0635\u0631 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u062F\u0627\u062E\u0644 \u062F\u0627\u0626\u0631\u0629 \u0648\u062A\u062F\u0648\u0651\u0631\u0647\u0627 \u0628\u0628\u0637\u0621
   #ring {
     position: absolute;
     top: 50%; left: 50%;
@@ -19,9 +18,8 @@
     border-radius: 50%;
     overflow: hidden;
     border: 2px solid rgba(65, 224, 244, 0.55);
-    box-shadow: 0 0 14px rgba(65, 224, 244, 0.35), inset 0 0 14px rgba(65, 224, 244, 0.25);
-    animation: spin 90s linear infinite;
     background: #05080a;
+    animation: spin 90s linear infinite;
   }
 
   @keyframes spin {
@@ -31,8 +29,13 @@
 
   #map {
     width: 100%; height: 100%;
-    /* \u0641\u0644\u062A\u0631 CSS \u064A\u0639\u0637\u064A \u0634\u0643\u0644 "\u0628\u0644\u0648\u0628\u0631\u0646\u062A" \u0633\u0645\u0627\u0648\u064A \u0644\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0639\u0627\u062F\u064A\u0629 */
     filter: invert(1) hue-rotate(155deg) saturate(2.4) brightness(0.85) contrast(1.15);
+    display: none;
+  }
+
+  #fallbackCanvas {
+    width: 100%; height: 100%;
+    display: block;
   }
 
   #centerDot {
@@ -45,6 +48,7 @@
     box-shadow: 0 0 8px 3px rgba(143, 242, 250, 0.85);
     z-index: 500;
     pointer-events: none;
+    display: none;
   }
 
   #statusLabel {
@@ -64,18 +68,21 @@
 
 <div id="ring">
   <div id="map"></div>
+  <canvas id="fallbackCanvas"></canvas>
 </div>
 <div id="centerDot"></div>
 <div id="statusLabel">NO SIGNAL</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// \u0645\u062E\u062A\u0628\u0631 \u062E\u0631\u064A\u0637\u0629 \u0645\u0635\u063A\u0631\u0629 \u062F\u0627\u0626\u0631\u064A\u0629 \u062A\u062F\u0648\u0631 \u0628\u0623\u0633\u0644\u0648\u0628 \u0628\u0644\u0648\u0628\u0631\u0646\u062A\u060C \u062A\u0639\u0631\u0636 \u0645\u0648\u0642\u0639 \u0627\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u062D\u0642\u064A\u0642\u064A (OpenStreetMap)
+var mode = null;
 var map = null;
 var marker = null;
+var lastLat = null;
+var lastLon = null;
 
-function initMap(lat, lon) {
+function initLeafletMap(lat, lon) {
   if (map) return;
+  document.getElementById('map').style.display = 'block';
   map = L.map('map', {
     zoomControl: false,
     attributionControl: false,
@@ -94,21 +101,111 @@ function initMap(lat, lon) {
     fillColor: '#41e0f4',
     fillOpacity: 0.9
   }).addTo(map);
-
-  document.getElementById('statusLabel').textContent = 'LOCKED';
 }
 
-// \u064A\u0646\u0627\u062F\u064A\u0647 Kotlin \u0643\u0644 \u0645\u0627 \u062A\u062D\u0635\u0651\u0644 \u0639\u0644\u0649 \u0625\u062D\u062F\u0627\u062B\u064A\u0627\u062A \u062C\u062F\u064A\u062F\u0629 \u0645\u0646 \u0627\u0644\u062C\u0647\u0627\u0632
+function drawFallback(lat, lon) {
+  var canvas = document.getElementById('fallbackCanvas');
+  var w = canvas.clientWidth;
+  var h = canvas.clientHeight;
+  canvas.width = w;
+  canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+
+  var cx = w / 2;
+  var cy = h / 2;
+  var color = 'rgba(65, 224, 244, 0.5)';
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  for (var i = 1; i <= 4; i++) {
+    var pos = (w / 5) * i;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, h);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, pos);
+    ctx.lineTo(w, pos);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = 'rgba(65, 224, 244, 0.35)';
+  ctx.lineWidth = 1;
+  for (var r = 1; r <= 3; r++) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, (Math.min(w, h) / 2) * (r / 3), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#8ff2fa';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = '#8ff2fa';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+}
+
+function activateFallback() {
+  if (mode === 'fallback') return;
+  mode = 'fallback';
+  document.getElementById('fallbackCanvas').style.display = 'block';
+  if (lastLat !== null) {
+    drawFallback(lastLat, lastLon);
+    document.getElementById('statusLabel').textContent = 'LOCKED (OFFLINE)';
+  }
+}
+
 function setCoords(lat, lon) {
-  if (!map) {
-    initMap(lat, lon);
-    return;
+  lastLat = lat;
+  lastLon = lon;
+
+  if (mode === 'leaflet') {
+    try {
+      if (!map) {
+        initLeafletMap(lat, lon);
+      } else {
+        map.setView([lat, lon]);
+        if (marker) marker.setLatLng([lat, lon]);
+      }
+      document.getElementById('statusLabel').textContent = 'LOCKED';
+      return;
+    } catch (e) {
+      mode = null;
+    }
   }
-  map.setView([lat, lon]);
-  if (marker) {
-    marker.setLatLng([lat, lon]);
+
+  if (mode !== 'fallback') {
+    activateFallback();
+  } else {
+    drawFallback(lat, lon);
+    document.getElementById('statusLabel').textContent = 'LOCKED (OFFLINE)';
   }
 }
+
+var leafletScript = document.createElement('script');
+leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+leafletScript.onload = function () {
+  if (mode === null) {
+    mode = 'leaflet';
+    if (lastLat !== null) {
+      setCoords(lastLat, lastLon);
+    }
+  }
+};
+leafletScript.onerror = function () {
+  if (mode === null) {
+    activateFallback();
+  }
+};
+document.head.appendChild(leafletScript);
+
+setTimeout(function () {
+  if (mode === null) {
+    activateFallback();
+  }
+}, 3000);
 </script>
 </body>
 </html>
