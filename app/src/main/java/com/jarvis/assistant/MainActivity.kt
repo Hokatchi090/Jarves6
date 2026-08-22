@@ -12,6 +12,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.graphics.drawable.GradientDrawable
+import android.location.Location
+import android.location.LocationManager
+import android.provider.MediaStore
 import android.speech.RecognizerIntent
 import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
@@ -23,6 +27,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.widget.Button
@@ -63,6 +68,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var listenRetryCount = 0
     private val maxListenRetries = 3
     private val retryHandler = Handler(Looper.getMainLooper())
+
+    // ---- \u0648\u0627\u062C\u0647\u0629 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629 \u0648\u0627\u0644\u0634\u0627\u0634\u0627\u062A ----
+    private var sidebarVisible = true
+    private val clockHandler = Handler(Looper.getMainLooper())
+    private lateinit var clockRunnable: Runnable
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
     private var userName: String = ""
@@ -83,6 +93,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         private const val REQ_SPEECH = 100
         private const val REQ_PERMISSIONS = 200
         private const val REQ_CONTACTS = 300
+        private const val REQ_LOCATION = 400
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,6 +101,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setContentView(R.layout.activity_main)
         jarvisDial = findViewById(R.id.jarvisDial)
         setupModuleMenu()
+        setupSidebarUi()
 
         statusText = findViewById(R.id.statusText)
         logText = findViewById(R.id.logText)
@@ -253,6 +265,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 !continuousMode
             ) {
                 enableContinuousMode()
+            }
+        }
+        if (requestCode == REQ_LOCATION) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                fetchAndShowLocation()
+            } else {
+                findViewById<TextView>(R.id.mapStatus).text = "\u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0629 \u0645\u0631\u0641\u0648\u0636\u0629"
             }
         }
     }
@@ -1156,6 +1176,215 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // \u062E\u0631\u064A\u0637\u0629 \u0627\u0633\u0645 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 -> \u0627\u0633\u0645 \u0627\u0644\u062D\u0632\u0645\u0629\u060C \u062A\u062A\u0645\u0644\u0627 \u0645\u0644\u064A \u0646\u0641\u062A\u062D\u0648 \u0642\u0627\u0626\u0645\u0629 APPS
     private val appNameToPackage = mutableMapOf<String, String>()
 
+    // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
+
+    private fun setupSidebarUi() {
+        val sidebarNav = findViewById<View>(R.id.sidebarNav)
+        val contentArea = findViewById<View>(R.id.contentArea)
+        val sidebarToggle = findViewById<TextView>(R.id.sidebarToggle)
+        val topClock = findViewById<TextView>(R.id.topClock)
+
+        // \u062F\u0627\u0626\u0631\u0629 \u062D\u0642\u064A\u0642\u064A\u0629 \u0644\u0632\u0631 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 (\u0628\u062F\u0648\u0646 \u0645\u0627 \u0646\u062D\u062A\u0627\u062C \u0645\u0644\u0641 drawable \u062C\u062F\u064A\u062F)
+        sidebarToggle.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(android.graphics.Color.parseColor("#16232A"))
+            setStroke(2, android.graphics.Color.parseColor("#3AA7B8"))
+        }
+
+        val navItems = mapOf(
+            "HOME" to findViewById<TextView>(R.id.navHome),
+            "MAP" to findViewById<TextView>(R.id.navMap),
+            "LAB" to findViewById<TextView>(R.id.navLab),
+            "SYS" to findViewById<TextView>(R.id.navSys),
+            "NET" to findViewById<TextView>(R.id.navNet),
+            "AI" to findViewById<TextView>(R.id.navAi)
+        )
+        val panels = mapOf(
+            "HOME" to findViewById<View>(R.id.homePanel),
+            "MAP" to findViewById<View>(R.id.mapPanel),
+            "LAB" to findViewById<View>(R.id.labPanel),
+            "SYS" to findViewById<View>(R.id.sysPanel),
+            "NET" to findViewById<View>(R.id.netPanel),
+            "AI" to findViewById<View>(R.id.aiPanel)
+        )
+
+        fun switchPanel(key: String) {
+            panels.forEach { (k, panel) -> panel.visibility = if (k == key) View.VISIBLE else View.GONE }
+            navItems.forEach { (k, item) ->
+                if (k == key) {
+                    item.setBackgroundColor(android.graphics.Color.parseColor("#16232A"))
+                    item.setTextColor(android.graphics.Color.parseColor("#8DEFFF"))
+                } else {
+                    item.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    item.setTextColor(android.graphics.Color.parseColor("#5C7A82"))
+                }
+            }
+            if (key == "SYS") refreshBatteryDisplay()
+        }
+
+        navItems.forEach { (key, item) ->
+            item.setOnClickListener { switchPanel(key) }
+        }
+
+        // \u0632\u0631 \u0625\u062E\u0641\u0627\u0621/\u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629
+        sidebarToggle.setOnClickListener {
+            sidebarVisible = !sidebarVisible
+            sidebarNav.visibility = if (sidebarVisible) View.VISIBLE else View.GONE
+            val params = contentArea.layoutParams as ViewGroup.MarginLayoutParams
+            val marginPx = if (sidebarVisible) (64 * resources.displayMetrics.density).toInt() else 0
+            params.marginStart = marginPx
+            contentArea.layoutParams = params
+        }
+
+        // ---- \u0627\u0644\u0633\u0627\u0639\u0629 \u0627\u0644\u0639\u0644\u0648\u064A\u0629: \u062A\u062A\u062D\u062F\u062B \u0643\u0644 30 \u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0644 \u0645\u0627 \u062A\u0628\u0642\u0649 \u0648\u0627\u0642\u0641\u0629 \u0639\u0644\u0649 00:00 ----
+        val timeFormat = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
+        clockRunnable = object : Runnable {
+            override fun run() {
+                topClock.text = timeFormat.format(java.util.Date())
+                clockHandler.postDelayed(this, 30_000L)
+            }
+        }
+        clockHandler.post(clockRunnable)
+
+        // ---- SYS panel: \u0623\u0632\u0631\u0627\u0631 \u062D\u0642\u064A\u0642\u064A\u0629 ----
+        val flashButton = findViewById<TextView>(R.id.sysFlashToggle)
+        flashButton.setOnClickListener {
+            setFlashlight(!flashOn)
+            flashButton.text = if (flashOn) "FLASH ON" else "FLASH"
+        }
+        findViewById<TextView>(R.id.sysCameraButton).setOnClickListener {
+            try {
+                startActivity(Intent(MediaStore.ACTION_IMAGE_CAPTURE))
+            } catch (e: Exception) {
+                log("\u062E\u0637\u0623 \u0641\u062A\u062D \u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627: ${e.message}")
+                respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u0627\u0644\u0643\u0627\u0645\u064A\u0631\u0627")
+            }
+        }
+        findViewById<TextView>(R.id.sysSettingsButton).setOnClickListener {
+            openSystemSettings()
+        }
+
+        // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
+        findViewById<TextView>(R.id.mapStatus).setOnClickListener {
+            requestDeviceLocation()
+        }
+
+        // ---- LAB panel: \u0641\u062A\u062D DESIGN LAB ----
+        findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
+            startActivity(Intent(this, DesignLabActivity::class.java))
+        }
+
+        // ---- AI panel: \u0637\u0644\u0628 \u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u062D\u0642\u064A\u0642\u064A\u0629 \u0645\u0646 Gemini ----
+        findViewById<TextView>(R.id.aiRefreshButton).setOnClickListener {
+            fetchAiSuggestions()
+        }
+    }
+
+    private fun refreshBatteryDisplay() {
+        val level = getBatteryLevel()
+        findViewById<TextView>(R.id.sysBattery).text = "BATTERY: $level%"
+    }
+
+    private fun requestDeviceLocation() {
+        val statusView = findViewById<TextView>(R.id.mapStatus)
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQ_LOCATION
+            )
+            return
+        }
+        fetchAndShowLocation()
+    }
+
+    private fun fetchAndShowLocation() {
+        val statusView = findViewById<TextView>(R.id.mapStatus)
+        try {
+            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val providers = locationManager.getProviders(true)
+            var bestLocation: Location? = null
+            for (provider in providers) {
+                val loc = locationManager.getLastKnownLocation(provider) ?: continue
+                if (bestLocation == null || loc.accuracy < bestLocation!!.accuracy) {
+                    bestLocation = loc
+                }
+            }
+            if (bestLocation != null) {
+                findViewById<TextView>(R.id.mapLat).text = "LAT: ${"%.5f".format(bestLocation.latitude)}"
+                findViewById<TextView>(R.id.mapLon).text = "LON: ${"%.5f".format(bestLocation.longitude)}"
+                statusView.text = "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0648\u0642\u0639"
+            } else {
+                statusView.text = "\u0645\u0627\u0644\u0642\u064A\u062A \u0645\u0648\u0642\u0639 \u0645\u062E\u0632\u0651\u0646 \u062D\u0627\u0644\u064A\u0627\u064B\u060C \u062C\u0631\u0651\u0628 \u0628\u0631\u0627 \u0641\u064A \u0645\u0643\u0627\u0646 \u0645\u0641\u062A\u0648\u062D"
+            }
+        } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u0627\u0644\u0645\u0648\u0642\u0639: ${e.message}")
+            statusView.text = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0627\u0644\u0645\u0648\u0642\u0639"
+        }
+    }
+
+    private fun fetchAiSuggestions() {
+        val suggestionsView = findViewById<TextView>(R.id.aiSuggestionsText)
+        val refreshButton = findViewById<TextView>(R.id.aiRefreshButton)
+        if (GEMINI_API_KEY.isBlank()) {
+            suggestionsView.text = "\u0645\u0627\u0641\u064A\u0634 \u0645\u0641\u062A\u0627\u062D Gemini \u0645\u0636\u0628\u0648\u0637"
+            return
+        }
+        refreshButton.text = "...\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F"
+
+        val prompt = "Give exactly 3 short, practical productivity or app-usage tips, each one line, no numbering, no markdown."
+        val jsonBody = JSONObject().apply {
+            put("contents", JSONArray().put(
+                JSONObject().apply {
+                    put("parts", JSONArray().put(
+                        JSONObject().apply { put("text", prompt) }
+                    ))
+                }
+            ))
+        }
+        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("x-goog-api-key", GEMINI_API_KEY)
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    refreshButton.text = "TAP TO GENERATE"
+                    suggestionsView.text = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A"
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val text = try {
+                    val responseText = response.body?.string() ?: ""
+                    val json = JSONObject(responseText)
+                    if (json.has("error")) {
+                        "\u062E\u0637\u0623 \u0645\u0646 Gemini: " + json.getJSONObject("error").optString("message", "")
+                    } else {
+                        json.getJSONArray("candidates")
+                            .getJSONObject(0)
+                            .getJSONObject("content")
+                            .getJSONArray("parts")
+                            .getJSONObject(0)
+                            .getString("text")
+                    }
+                } catch (e: Exception) {
+                    log("\u062E\u0637\u0623 \u062A\u062D\u0644\u064A\u0644 \u0631\u062F AI: ${e.message}")
+                    "\u062A\u0639\u0630\u0631 \u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0631\u062F"
+                }
+                runOnUiThread {
+                    refreshButton.text = "TAP TO GENERATE"
+                    suggestionsView.text = text
+                }
+            }
+        })
+    }
+
     private fun setupModuleMenu() {
         jarvisDial.setModuleClickListener { module ->
             log("\u0636\u063A\u0637 \u0632\u0631 \u0627\u0644\u0645\u0646\u064A\u0648: $module")
@@ -1500,7 +1729,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             return
         }
         respond("\u062E\u0644\u064A\u0646\u064A \u0623\u0634\u0631\u062D\u0644\u0643...")
-        val prompt = "\u0627\u0634\u0631\u062D\u0644\u064A \u0645\u0648\u0636\u0648\u0639 \"$topic\" \u0628\u0637\u0631\u064A\u0642\u0629 \u0633\u0647\u0644\u0629 \u0648\u0645\u0628\u0633\u0637\u0629 \u0645\u0639 \u0645\u062B\u0627\u0644 \u0625\u0630\u0627 \u0623\u0645\u0643\u0646\u060C \u0628\u0623\u0633\u0644\u0648\u0628 \u0642\u0631\u064A\u0628 \u0648\u0645\u0641\u0647\u0648\u0645"
+      val prompt = "\u0627\u0634\u0631\u062D\u0644\u064A \u0645\u0648\u0636\u0648\u0639 \"$topic\" \u0628\u0637\u0631\u064A\u0642\u0629 \u0633\u0647\u0644\u0629 \u0648\u0645\u0628\u0633\u0637\u0629 \u0645\u0639 \u0645\u062B\u0627\u0644 \u0625\u0630\u0627 \u0623\u0645\u0643\u0646\u060C \u0628\u0623\u0633\u0644\u0648\u0628 \u0642\u0631\u064A\u0628 \u0648\u0645\u0641\u0647\u0648\u0645"
         askGemini(prompt)
     }
 
@@ -1661,7 +1890,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         super.onPause()
-        // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u064
+        // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629 (\u064A\u0648\u0641\u0631 \u0628\u0637\u0627\u0631\u064A\u0629 \u0648\u064A\u0645\u0646\u0639 \u0627\u0644\u0645\u0627\u064A\u0643 \u064A\u0628\u0642\u0649 \u062E\u0627\u062F\u0645)
         retryHandler.removeCallbacksAndMessages(null)
         speechRecognizer?.stopListening()
         tts.stop()
@@ -1684,6 +1913,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         super.onDestroy()
         retryHandler.removeCallbacksAndMessages(null)
+        clockHandler.removeCallbacksAndMessages(null)
         tts.shutdown()
         stopMusic()
         speechRecognizer?.destroy()
