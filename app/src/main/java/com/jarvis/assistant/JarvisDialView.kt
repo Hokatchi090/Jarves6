@@ -436,18 +436,26 @@ class JarvisDialView @JvmOverloads constructor(
 
     // ---------------- Clock module ----------------
 
+    // \u0646\u0641\u0633 \u0627\u0644\u062A\u0646\u0633\u064A\u0642 \u0645\u0639\u0627\u062F: \u064A\u062A\u0628\u0646\u0649 \u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629\u060C \u0648\u0627\u0644\u0648\u0642\u062A \u064A\u062A\u062D\u062F\u062B \u0645\u0631\u0629 \u0641\u064A \u0627\u0644\u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0644 \u0643\u0644 \u0641\u0631\u064A\u0645 (60 \u0645\u0631\u0629/\u062b)
+    private val timeFormat = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
+    private var cachedTimeText = ""
+    private var lastTimeUpdateMs = 0L
+
     private fun drawClockModule(canvas: Canvas, cx: Float, cy: Float, base: Float) {
         if (!clockVisible) return
 
-        val time = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
-            .format(java.util.Date())
+        val now = System.currentTimeMillis()
+        if (now - lastTimeUpdateMs >= 1000L) {
+            cachedTimeText = timeFormat.format(java.util.Date(now))
+            lastTimeUpdateMs = now
+        }
 
         modulePaint.style = Paint.Style.FILL
         modulePaint.textAlign = Paint.Align.CENTER
         modulePaint.textSize = base * 0.16f
         modulePaint.color = Color.argb(155, 200, 220, 230)
 
-        canvas.drawText(time, cx, cy - base * 1.85f, modulePaint)
+        canvas.drawText(cachedTimeText, cx, cy - base * 1.85f, modulePaint)
     }
 
     // ---------------- Add button ----------------
