@@ -10,6 +10,8 @@ import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognizerIntent
 import android.speech.RecognitionListener
 import android.speech.SpeechRecognizer
@@ -57,6 +59,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var continuousMode = false
     private var speechRecognizer: SpeechRecognizer? = null
     private var currentLangCode = "en"
+    // \u062A\u062A\u0628\u0651\u0639 \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0628\u0639\u062F \u0641\u0634\u0644 \u0627\u0644\u062A\u0639\u0631\u0641 \u0627\u0644\u0635\u0648\u062A\u064A (\u062D\u062F \u0623\u0642\u0635\u0649 3 \u0645\u0639 \u062A\u0623\u062E\u064A\u0631 \u062A\u0635\u0627\u0639\u062F\u064A)
+    private var listenRetryCount = 0
+    private val maxListenRetries = 3
+    private val retryHandler = Handler(Looper.getMainLooper())
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
     private var userName: String = ""
@@ -286,11 +292,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         override fun onEndOfSpeech() {}
 
         override fun onError(error: Int) {
-            // \u0628\u064A\u0635\u064A\u0631 \u0639\u0627\u062F\u064A \u0648\u0642\u062A \u0627\u0644\u0635\u0645\u062A \u0623\u0648 \u0627\u0644\u0636\u062C\u064A\u062C\u060C \u0645\u0646\u0639\u064A\u062F \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0625\u0630\u0627 \u0644\u0633\u0627 \u0628\u0648\u0636\u0639 \u0645\u0633\u062A\u0645\u0631
-            if (continuousMode) startListening()
+            // \u0625\u0639\u0627\u062F\u0629 \u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062D\u062F\u0648\u062F\u0629 (3 \u0645\u0631\u0627\u062A \u0623\u0642\u0635\u0649) \u0645\u0639 \u062A\u0623\u062E\u064A\u0631 \u062A\u0635\u0627\u0639\u062F\u064A \u0628\u062F\u0644 \u0645\u062D\u0627\u0648\u0644\u0629 \u0641\u0648\u0631\u064A\u0629 \u0642\u062F \u062A\u0647\u0631\u0633 \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629
+            if (!continuousMode) return
+
+            listenRetryCount++
+            if (listenRetryCount > maxListenRetries) {
+                listenRetryCount = 0
+                continuousMode = false
+                val container = findViewById<View>(R.id.micButton)
+                findViewById<TextView>(R.id.micIcon).text = "\uD83C\uDF99\uFE0F"
+                stopPulseAnimation(container)
+                statusText.text = "\u062C\u0627\u0647\u0632 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639"
+                log("\u062A\u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 \u0628\u0639\u062F $maxListenRetries \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0641\u0627\u0634\u0644\u0629 (\u0631\u0645\u0632 \u0627\u0644\u062E\u0637\u0623: $error)")
+                return
+            }
+
+            val delayMs = 500L * listenRetryCount
+            retryHandler.postDelayed({
+                if (continuousMode) startListening()
+            }, delayMs)
         }
 
         override fun onResults(resultsBundle: Bundle?) {
+            listenRetryCount = 0
             val matches = resultsBundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val spoken = matches?.firstOrNull()?.trim() ?: ""
             handleSpeechResult(spoken)
@@ -1637,29 +1661,4 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onPause() {
         super.onPause()
-        // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629 (\u064A\u0648\u0641\u0631 \u0628\u0637\u0627\u0631\u064A\u0629 \u0648\u064A\u0645\u0646\u0639 \u0627\u0644\u0645\u0627\u064A\u0643 \u064A\u0628\u0642\u0649 \u062E\u0627\u062F\u0645)
-        speechRecognizer?.stopListening()
-        tts.stop()
-        if (::jarvisDial.isInitialized) {
-            jarvisDial.pauseAnimation()
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (::jarvisDial.isInitialized) {
-            jarvisDial.resumeAnimation()
-        }
-        // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
-        if (continuousMode) {
-            startListening()
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        tts.shutdown()
-        stopMusic()
-        speechRecognizer?.destroy()
-    }
-}
+        // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u064
