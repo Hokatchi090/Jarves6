@@ -1142,7 +1142,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 "APPS" -> showAppsModule()
                 "SYS" -> openSystemSettings()
                 "MAP" -> openApp("com.google.android.apps.maps", "\u062E\u0631\u0627\u0626\u0637 \u062C\u0648\u062C\u0644")
-                "3D" -> respond("\u0642\u0648\u0644\u064A \"\u0635\u0645\u0645\u064A [\u0648\u0635\u0641]\" \u0648\u0646\u062C\u0647\u0632\u0644\u0643 \u0627\u0644\u062A\u0635\u0645\u064A\u0645")
+                "3D" -> startActivity(Intent(this, DesignLabActivity::class.java))
                 "CLK" -> openAlarmsList()
                 else -> log("\u0632\u0631 \u0645\u0646\u064A\u0648 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641: $module")
             }
