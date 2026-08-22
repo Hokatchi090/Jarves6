@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent; overflow: hidden;
+  }
+
+  /* \u0627\u0644\u062D\u0627\u0648\u064A\u0629 \u0627\u0644\u062F\u0627\u0626\u0631\u064A\u0629 \u0627\u0644\u062E\u0627\u0631\u062C\u064A\u0629: \u062A\u062D\u0635\u0631 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u062F\u0627\u062E\u0644 \u062F\u0627\u0626\u0631\u0629 \u0648\u062A\u062F\u0648\u0651\u0631\u0647\u0627 \u0628\u0628\u0637\u0621
+  #ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 92%; height: 92%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(65, 224, 244, 0.55);
+    box-shadow: 0 0 14px rgba(65, 224, 244, 0.35), inset 0 0 14px rgba(65, 224, 244, 0.25);
+    animation: spin 90s linear infinite;
+    background: #05080a;
+  }
+
+  @keyframes spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to   { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  #map {
+    width: 100%; height: 100%;
+    /* \u0641\u0644\u062A\u0631 CSS \u064A\u0639\u0637\u064A \u0634\u0643\u0644 "\u0628\u0644\u0648\u0628\u0631\u0646\u062A" \u0633\u0645\u0627\u0648\u064A \u0644\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0639\u0627\u062F\u064A\u0629 */
+    filter: invert(1) hue-rotate(155deg) saturate(2.4) brightness(0.85) contrast(1.15);
+  }
+
+  #centerDot {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 8px; height: 8px;
+    margin: -4px 0 0 -4px;
+    background: #8ff2fa;
+    border-radius: 50%;
+    box-shadow: 0 0 8px 3px rgba(143, 242, 250, 0.85);
+    z-index: 500;
+    pointer-events: none;
+  }
+
+  #statusLabel {
+    position: absolute;
+    bottom: 2px; left: 0; right: 0;
+    text-align: center;
+    font-family: monospace;
+    font-size: 9px;
+    color: #7fe9f0;
+    z-index: 500;
+    pointer-events: none;
+    text-shadow: 0 0 4px rgba(0,0,0,0.8);
+  }
+</style>
+</head>
+<body>
+
+<div id="ring">
+  <div id="map"></div>
+</div>
+<div id="centerDot"></div>
+<div id="statusLabel">NO SIGNAL</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// \u0645\u062E\u062A\u0628\u0631 \u062E\u0631\u064A\u0637\u0629 \u0645\u0635\u063A\u0631\u0629 \u062F\u0627\u0626\u0631\u064A\u0629 \u062A\u062F\u0648\u0631 \u0628\u0623\u0633\u0644\u0648\u0628 \u0628\u0644\u0648\u0628\u0631\u0646\u062A\u060C \u062A\u0639\u0631\u0636 \u0645\u0648\u0642\u0639 \u0627\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u062D\u0642\u064A\u0642\u064A (OpenStreetMap)
+var map = null;
+var marker = null;
+
+function initMap(lat, lon) {
+  if (map) return;
+  map = L.map('map', {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+    doubleClickZoom: false
+  }).setView([lat, lon], 15);
+
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
+
+  marker = L.circleMarker([lat, lon], {
+    radius: 6,
+    color: '#41e0f4',
+    fillColor: '#41e0f4',
+    fillOpacity: 0.9
+  }).addTo(map);
+
+  document.getElementById('statusLabel').textContent = 'LOCKED';
+}
+
+// \u064A\u0646\u0627\u062F\u064A\u0647 Kotlin \u0643\u0644 \u0645\u0627 \u062A\u062D\u0635\u0651\u0644 \u0639\u0644\u0649 \u0625\u062D\u062F\u0627\u062B\u064A\u0627\u062A \u062C\u062F\u064A\u062F\u0629 \u0645\u0646 \u0627\u0644\u062C\u0647\u0627\u0632
+function setCoords(lat, lon) {
+  if (!map) {
+    initMap(lat, lon);
+    return;
+  }
+  map.setView([lat, lon]);
+  if (marker) {
+    marker.setLatLng([lat, lon]);
+  }
+}
+</script>
+</body>
+</html>
