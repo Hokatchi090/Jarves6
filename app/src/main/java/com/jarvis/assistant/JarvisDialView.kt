@@ -68,6 +68,14 @@ class JarvisDialView @JvmOverloads constructor(
     private val modulePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
     }
+    // \u0643\u0627\u0626\u0646\u0627\u062A \u0645\u0639\u0627\u062F 'u0627\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645: \u0646\u0641\u0633 Paint/RectF \u064A\u062A\u0639\u062F\u0644 \u0643\u0644 \u0641\u0631\u064A\u0645 \u0628\u062F\u0644 \u0645\u0627 \u064A\u062A\u0628\u0646\u0649 \u0645\u0646 \u062C\u062F\u064A\u062F (\u064A\u0648\u0641\u0631 \u0623\u062F\u0627\u0621 \u0648\u064A\u0642\u0644\u0644 \u0636\u063A\u0637 GC)
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val outerHudRect = RectF()
+    private val ringRect = RectF()
+    private val coreInnerRect = RectF()
+
     private var listening = false
     private var hudState = JarvisHudState.READY
 
@@ -96,7 +104,11 @@ class JarvisDialView @JvmOverloads constructor(
 
     init {
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-        repeat(95) {
+        // \u0639\u0644\u0649 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u0636\u0639\u064A\u0641\u0629 (isLowRamDevice) \u0646\u0642\u0644\u0644 \u0639\u062F\u062F \u0627\u0644\u062C\u0633\u064A\u0645\u0627\u062A \u0644\u062A\u062E\u0641\u064A\u0641 \u0627\u0644\u062D\u0645\u0644 \u0639\u0644\u0649 \u0627\u0644\u0645\u0639\u0627\u0644\u062C
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        val isLowRam = am?.isLowRamDevice ?: false
+        val particleCount = if (isLowRam) 40 else 95
+        repeat(particleCount) {
             particles.add(
                 Particle(
                     x = random.nextFloat() * 2f - 1f,
@@ -195,8 +207,7 @@ class JarvisDialView @JvmOverloads constructor(
         }
         val radius = base * 0.72f * pulse
 
-        val glow = Paint(Paint.ANTI_ALIAS_FLAG)
-        glow.style = Paint.Style.FILL
+        val glow = glowPaint
         glow.color = cyan
         glow.alpha = if (speaking) 34 else 18
         glow.setShadowLayer(base * 0.34f, 0f, 0f, cyan)
@@ -236,11 +247,11 @@ class JarvisDialView @JvmOverloads constructor(
         ringPaint.alpha = 135
         ringPaint.strokeWidth = 2.2f
         val rotation = elapsed * 8f
-        val outerRect = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
+        outerHudRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
 
-        canvas.drawArc(outerRect, rotation, 82f, false, ringPaint)
-        canvas.drawArc(outerRect, rotation + 148f, 54f, false, ringPaint)
-        canvas.drawArc(outerRect, rotation + 245f, 72f, false, ringPaint)
+        canvas.drawArc(outerHudRect, rotation, 82f, false, ringPaint)
+        canvas.drawArc(outerHudRect, rotation + 148f, 54f, false, ringPaint)
+        canvas.drawArc(outerHudRect, rotation + 245f, 72f, false, ringPaint)
     }
 
     private fun drawMainRings(canvas: Canvas, cx: Float, cy: Float, base: Float) {
@@ -278,7 +289,7 @@ class JarvisDialView @JvmOverloads constructor(
             canvas.rotate(Math.toDegrees(tilt.toDouble()).toFloat(), cx, cy)
             canvas.scale(1f, 0.72f, cx, cy)
 
-            val rect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
+            ringRect.set(cx - rx, cy - ry, cx + rx, cy + ry)
 
             ringPaint.color = if (index == 0) cyanBright else cyan
             ringPaint.alpha = when (index) {
@@ -294,9 +305,9 @@ class JarvisDialView @JvmOverloads constructor(
                 else -> 1.2f
             }
 
-            canvas.drawArc(rect, rotation, 210f, false, ringPaint)
-            canvas.drawArc(rect, rotation + 238f, 56f, false, ringPaint)
-            canvas.drawArc(rect, rotation + 320f, 24f, false, ringPaint)
+            canvas.drawArc(ringRect, rotation, 210f, false, ringPaint)
+            canvas.drawArc(ringRect, rotation + 238f, 56f, false, ringPaint)
+            canvas.drawArc(ringRect, rotation + 320f, 24f, false, ringPaint)
 
             canvas.restore()
         }
@@ -353,9 +364,8 @@ class JarvisDialView @JvmOverloads constructor(
         }
         val radius = base * 0.34f * pulse
 
-        val glow = Paint(Paint.ANTI_ALIAS_FLAG)
+        val glow = glowPaint
         glow.color = cyan
-        glow.style = Paint.Style.FILL
         glow.alpha = if (speaking) 55 else 28
         glow.setShadowLayer(base * 0.20f, 0f, 0f, cyan)
         canvas.drawCircle(cx, cy, radius * 1.32f, glow)
@@ -372,12 +382,12 @@ class JarvisDialView @JvmOverloads constructor(
 
         ringPaint.alpha = 115
         ringPaint.strokeWidth = 1f
-        val innerRect = RectF(
+        coreInnerRect.set(
             cx - radius * 0.82f, cy - radius * 0.82f,
             cx + radius * 0.82f, cy + radius * 0.82f
         )
-        canvas.drawArc(innerRect, elapsed * 50f, 145f, false, ringPaint)
-        canvas.drawArc(innerRect, elapsed * -38f + 180f, 95f, false, ringPaint)
+        canvas.drawArc(coreInnerRect, elapsed * 50f, 145f, false, ringPaint)
+        canvas.drawArc(coreInnerRect, elapsed * -38f + 180f, 95f, false, ringPaint)
     }
 
     private fun drawJarvisText(canvas: Canvas, cx: Float, cy: Float, base: Float) {
