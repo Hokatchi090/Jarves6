@@ -1635,6 +1635,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         logText.append("\n\n$text")
     }
 
+    override fun onPause() {
+        super.onPause()
+        // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629 (\u064A\u0648\u0641\u0631 \u0628\u0637\u0627\u0631\u064A\u0629 \u0648\u064A\u0645\u0646\u0639 \u0627\u0644\u0645\u0627\u064A\u0643 \u064A\u0628\u0642\u0649 \u062E\u0627\u062F\u0645)
+        speechRecognizer?.stopListening()
+        tts.stop()
+        if (::jarvisDial.isInitialized) {
+            jarvisDial.pauseAnimation()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::jarvisDial.isInitialized) {
+            jarvisDial.resumeAnimation()
+        }
+        // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
+        if (continuousMode) {
+            startListening()
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         tts.shutdown()
