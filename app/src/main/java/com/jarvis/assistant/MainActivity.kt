@@ -113,9 +113,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
-    private var userName: String = ""
-    private var userEmail: String = ""
-    private var userPhone: String = ""
+    private var userName: String = "Mohamed youcef"
+    private var userEmail: String = "youcefakram4@gmail.com"
+    private var userPhone: String = "0775540495"
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
     private val client = OkHttpClient()
