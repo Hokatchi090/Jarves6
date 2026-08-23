@@ -1,6 +1,8 @@
 package com.jarvis.assistant
 
 import android.Manifest
+import android.telephony.SmsManager
+import android.provider.Telephony
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -77,9 +79,25 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val clockHandler = Handler(Looper.getMainLooper())
     private lateinit var clockRunnable: Runnable
     private lateinit var miniMapView: WebView
+    private lateinit var miniBrowserView: WebView
     private var miniMapEnlarged = false
+    private var miniBrowserEnlarged = false
     private var lastKnownLat = 0.0
     private var lastKnownLon = 0.0
+    private var lastBrowserUrl = "https://www.google.com"
+
+    // \u062C\u0633\u0631 JavaScript <-> Kotlin \u062E\u0627\u0635 \u0628\u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631
+    inner class BrowserBridgeInterface {
+        @JavascriptInterface
+        fun onDoubleTap() {
+            runOnUiThread { toggleMiniBrowserSize() }
+        }
+
+        @JavascriptInterface
+        fun onTripleTap() {
+            runOnUiThread { openFullscreenBrowser() }
+        }
+    }
 
     // \u062C\u0633\u0631 JavaScript <-> Kotlin \u062E\u0627\u0635 \u0628\u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0635\u063A\u064A\u0631\u0629: \u064A\u0633\u062A\u0642\u0628\u0644 \u0625\u0634\u0627\u0631\u0627\u062A \u0627\u0644\u0636\u063A\u0637 \u0627\u0644\u0645\u0632\u062F\u0648\u062C \u0648\u0627\u0644\u062B\u0644\u0627\u062B\u064A
     inner class MapBridgeInterface {
@@ -96,6 +114,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
     private var userName: String = ""
+    private var userEmail: String = ""
+    private var userPhone: String = ""
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
     private val client = OkHttpClient()
@@ -129,6 +149,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         userName = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
             .getString("user_name", "") ?: ""
+        userEmail = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("user_email", "") ?: ""
+        userPhone = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("user_phone", "") ?: ""
         if (userName.isNotBlank()) {
             log("\u062C\u0627\u0631\u0641\u0633: \u0623\u0647\u0644\u0627 ${userName}\u060C \u0645\u0628\u0633\u0648\u0637 \u0625\u0646\u0643 \u0631\u062C\u0639\u062A")
         }
@@ -257,7 +281,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.CAMERA,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_SMS,
+            Manifest.permission.SEND_SMS
         )) {
             if (ActivityCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
                 needed.add(p)
@@ -521,6 +548,49 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val name = extractNameAfter(cmd, "\u0627\u062A\u0635\u0644 \u0628")
                 callContact(name)
             }
+            cmd.contains("\u0627\u064A\u0645\u064A\u0644\u064A") || cmd.contains("\u0628\u0631\u064A\u062F\u064A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A") -> {
+                val marker = if (cmd.contains("\u0627\u064A\u0645\u064A\u0644\u064A")) "\u0627\u064A\u0645\u064A\u0644\u064A" else "\u0628\u0631\u064A\u062F\u064A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A"
+                val email = extractNameAfter(cmd, marker)
+                if (email.isNotBlank()) {
+                    saveUserEmail(email)
+                    respond("\u062D\u0641\u0638\u062A \u0625\u064A\u0645\u064A\u0644\u0643")
+                } else if (userEmail.isNotBlank()) {
+                    respond("\u0625\u064A\u0645\u064A\u0644\u0643 \u0647\u0648 $userEmail")
+                } else {
+                    respond("\u0645\u0627\u0641\u064A\u0634 \u0625\u064A\u0645\u064A\u0644 \u0645\u062D\u0641\u0648\u0638")
+                }
+            }
+            cmd.contains("\u0631\u0642\u0645\u064A \u0647\u0648") -> {
+                val phone = extractNameAfter(cmd, "\u0631\u0642\u0645\u064A \u0647\u0648")
+                if (phone.isNotBlank()) {
+                    saveUserPhone(phone)
+                    respond("\u062D\u0641\u0638\u062A \u0631\u0642\u0645\u0643")
+                } else {
+                    respond("\u0642\u0648\u0644\u064A \u0627\u0644\u0631\u0642\u0645 \u0628\u0639\u062F \u0643\u0644\u0645\u0629 \u0631\u0642\u0645\u064A \u0647\u0648")
+                }
+            }
+            cmd.contains("\u0634\u0648 \u0631\u0642\u0645\u064A") || cmd.contains("\u0648\u0634 \u0631\u0642\u0645\u064A") -> {
+                if (userPhone.isNotBlank()) respond("\u0631\u0642\u0645\u0643 \u0647\u0648 $userPhone")
+                else respond("\u0645\u0627\u0641\u064A\u0634 \u0631\u0642\u0645 \u0645\u062D\u0641\u0648\u0638")
+            }
+            cmd.contains("\u0627\u0642\u0631\u0627 \u0631\u0633\u0627\u0626\u0644\u064A") || cmd.contains("\u0631\u0633\u0627\u0626\u0644\u064A \u0627\u0644\u062C\u062F\u064A\u062F\u0629") -> {
+                handleReadMessages()
+            }
+            cmd.contains("\u0627\u0634\u0631\u062D") && cmd.contains("\u0631\u0633\u0627\u0644\u0629") -> {
+                handleExplainLastMessage()
+            }
+            cmd.contains("\u0627\u0628\u0639\u062B \u0631\u0633\u0627\u0644\u0629") || cmd.contains("\u062F\u064A\u0631 \u0631\u0633\u0627\u0644\u0629") -> {
+                val afterMarker = if (cmd.contains("\u0627\u0628\u0639\u062B \u0631\u0633\u0627\u0644\u0629")) "\u0627\u0628\u0639\u062B \u0631\u0633\u0627\u0644\u0629" else "\u062F\u064A\u0631 \u0631\u0633\u0627\u0644\u0629"
+                val rest = extractNameAfter(cmd, afterMarker)
+                val parts = rest.split("\u062A\u0642\u0648\u0644", limit = 2)
+                if (parts.size == 2) {
+                    val contactName = parts[0].removePrefix("\u0644").trim()
+                    val messageText = parts[1].trim()
+                    sendSmsToContact(contactName, messageText)
+                } else {
+                    respond("\u0642\u0648\u0644\u064A: \u0627\u0628\u0639\u062B \u0631\u0633\u0627\u0644\u0629 \u0644\u0641\u0644\u0627\u0646 \u062A\u0642\u0648\u0644 \u0627\u0644\u0646\u0635")
+                }
+            }
             cmd.contains("call ") -> {
                 val name = extractNameAfter(cmd, "call ")
                 callContact(name)
@@ -564,6 +634,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
             cmd.contains("\u0627\u0641\u062A\u062D") && cmd.contains("\u062E\u0631\u064A\u0637\u0629") -> {
                 openFullscreenMap()
+            }
+            cmd.contains("\u0627\u0641\u062A\u062D") && (cmd.contains("\u0645\u062A\u0635\u0641\u062D") || cmd.contains("\u0645\u0648\u0642\u0639")) -> {
+                val site = extractNameAfter(cmd, if (cmd.contains("\u0645\u062A\u0635\u0641\u062D")) "\u0645\u062A\u0635\u0641\u062D" else "\u0645\u0648\u0642\u0639")
+                if (site.isNotBlank()) {
+                    openMiniBrowser(site)
+                    respond("\u0641\u0627\u062A\u062D $site")
+                } else {
+                    respond("\u0642\u0648\u0644\u064A \u0627\u0633\u0645 \u0627\u0644\u0645\u0648\u0642\u0639 \u0627\u0644\u0644\u064A \u062A\u062D\u0628 \u062A\u0641\u062A\u062D\u0648")
+                }
+            }
+            cmd.contains("\u0633\u0643\u0631") && cmd.contains("\u0645\u062A\u0635\u0641\u062D") -> {
+                closeMiniBrowser()
             }
             cmd.contains("\u062D\u0648\u0644") && (cmd.contains("\u0643\u064A\u0644\u0648\u0645\u062A\u0631") || cmd.contains("\u0645\u064A\u0644") ||
                     cmd.contains("\u0643\u064A\u0644\u0648") || cmd.contains("\u0628\u0627\u0648\u0646\u062F") ||
@@ -1003,12 +1085,132 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         })
     }
 
-    // ---------------- User name ----------------
+    // ---------------- User name / email / phone ----------------
 
     private fun saveUserName(name: String) {
         userName = name
         getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
             .putString("user_name", name).apply()
+    }
+
+    private fun saveUserEmail(email: String) {
+        userEmail = email
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+            .putString("user_email", email).apply()
+    }
+
+    private fun saveUserPhone(phone: String) {
+        userPhone = phone
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+            .putString("user_phone", phone).apply()
+    }
+
+    // ---------------- SMS: reading, explaining, sending ----------------
+
+    // \u064A\u062F\u0648\u0631 \u0639\u0644\u0649 \u062C\u0647\u0627\u062A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0639\u0646 \u0627\u0633\u0645 \u0648\u064A\u0631\u062C\u0639 \u0627\u0644\u0631\u0642\u0645\u060C \u0623\u0648 null \u0625\u0630\u0627 \u0645\u0627\u0644\u0642\u0627\u0634
+    private fun lookupContactNumber(name: String): String? {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return null
+        }
+        val cursor = contentResolver.query(
+            ContactsContract.Contacts.CONTENT_URI,
+            null,
+            "${ContactsContract.Contacts.DISPLAY_NAME} LIKE ?",
+            arrayOf("%$name%"),
+            null
+        )
+        cursor?.use { c ->
+            if (c.moveToFirst()) {
+                val contactId = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
+                val phoneCursor = contentResolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    null,
+                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                    arrayOf(contactId),
+                    null
+                )
+                phoneCursor?.use { pc ->
+                    if (pc.moveToFirst()) {
+                        return pc.getString(
+                            pc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        )
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun readRecentSms(count: Int = 5): List<Pair<String, String>> {
+        val results = mutableListOf<Pair<String, String>>()
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return results
+        }
+        val uri = Telephony.Sms.CONTENT_URI
+        val projection = arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY)
+        contentResolver.query(uri, projection, null, null, "${Telephony.Sms.DATE} DESC")?.use { cursor ->
+            val addressIndex = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
+            val bodyIndex = cursor.getColumnIndex(Telephony.Sms.BODY)
+            var read = 0
+            while (cursor.moveToNext() && read < count) {
+                val address = cursor.getString(addressIndex) ?: "\u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641"
+                val body = cursor.getString(bodyIndex) ?: ""
+                results.add(address to body)
+                read++
+            }
+        }
+        return results
+    }
+
+    private fun handleReadMessages() {
+        val messages = readRecentSms(3)
+        if (messages.isEmpty()) {
+            respond("\u0645\u0627\u0643\u0627\u0634 \u0631\u0633\u0627\u0626\u0644 \u0623\u0648 \u0645\u0627\u0639\u0646\u062F\u0643\u0634 \u0635\u0644\u0627\u062D\u064A\u0629 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0631\u0633\u0627\u0626\u0644")
+            return
+        }
+        val summary = messages.joinToString(". ") { (from, body) -> "\u0645\u0646 $from: $body" }
+        respond(summary)
+    }
+
+    private fun handleExplainLastMessage() {
+        val messages = readRecentSms(1)
+        if (messages.isEmpty()) {
+            respond("\u0645\u0627\u0643\u0627\u0634 \u0631\u0633\u0627\u0626\u0644 \u0623\u0648 \u0645\u0627\u0639\u0646\u062F\u0643\u0634 \u0635\u0644\u0627\u062D\u064A\u0629 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0631\u0633\u0627\u0626\u0644")
+            return
+        }
+        val (from, body) = messages[0]
+        if (GEMINI_API_KEY.isBlank()) {
+            respond("\u0622\u062E\u0631 \u0631\u0633\u0627\u0644\u0629 \u0645\u0646 $from: $body")
+            return
+        }
+        askGemini("\u0627\u0634\u0631\u062D\u0644\u064A \u0628\u0627\u062E\u062A\u0635\u0627\u0631 \u0647\u0627\u0630\u0647 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0648\u0634\u0648 \u0627\u0644\u0645\u0642\u0635\u0648\u062F \u0645\u0646\u0647\u0627: $body")
+    }
+
+    private fun sendSmsToContact(name: String, message: String) {
+        val number = lookupContactNumber(name)
+        if (number == null) {
+            respond("\u0645\u0627 \u0644\u0642\u064A\u062A $name \u0641\u064A \u062C\u0647\u0627\u062A \u0627\u0644\u0627\u062A\u0635\u0627\u0644")
+            return
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.SEND_SMS), REQ_PERMISSIONS)
+            respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0637\u0644\u0628 \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0631\u0633\u0627\u0626\u0644 \u0623\u0648\u0644")
+            return
+        }
+        try {
+            val smsManager = getSystemService(SmsManager::class.java)
+            smsManager.sendTextMessage(number, null, message, null, null)
+            respond("\u0628\u0639\u062B\u062A \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0644\u0640 $name")
+        } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0633\u0627\u0644\u0629: ${e.message}")
+            respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u0628\u0639\u062B \u0627\u0644\u0631\u0633\u0627\u0644\u0629")
+        }
     }
 
     // ---------------- Language switching ----------------
@@ -1227,6 +1429,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         miniMapView.addJavascriptInterface(MapBridgeInterface(), "MapBridge")
         miniMapView.loadUrl("file:///android_asset/mini_map.html")
 
+        // ---- \u062A\u0647\u064A\u0626\u0629 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C (\u0645\u062E\u0641\u064A \u0644\u0648\u062F \u0627\u0644\u0641\u062A\u062D) ----
+        miniBrowserView = findViewById(R.id.miniBrowserView)
+        miniBrowserView.settings.javaScriptEnabled = true
+        miniBrowserView.settings.domStorageEnabled = true
+        miniBrowserView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        miniBrowserView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        miniBrowserView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        miniBrowserView.addJavascriptInterface(BrowserBridgeInterface(), "BrowserBridge")
+        miniBrowserView.loadUrl("file:///android_asset/mini_browser.html")
+
         // \u062F\u0627\u0626\u0631\u0629 \u062D\u0642\u064A\u0642\u064A\u0629 \u0644\u0632\u0631 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 (\u0628\u062F\u0648\u0646 \u0645\u0627 \u0646\u062D\u062A\u0627\u062C \u0645\u0644\u0641 drawable \u062C\u062F\u064A\u062F)
         sidebarToggle.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -1327,6 +1539,34 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.aiRefreshButton).setOnClickListener {
             fetchAiSuggestions()
         }
+    }
+
+    // \u064A\u0641\u062A\u062D \u0645\u0648\u0642\u0639 \u0648\u064A\u0628 \u0641\u064A \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C\u060C \u0648\u064A\u062E\u0641\u064A \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0645\u0624\u0642\u062A\u0627\u064B
+    private fun openMiniBrowser(url: String) {
+        val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
+        lastBrowserUrl = fullUrl
+        miniMapView.visibility = View.GONE
+        miniBrowserView.visibility = View.VISIBLE
+        miniBrowserView.evaluateJavascript("loadSite('$fullUrl');", null)
+    }
+
+    private fun closeMiniBrowser() {
+        miniBrowserView.visibility = View.GONE
+        miniMapView.visibility = View.VISIBLE
+    }
+
+    private fun toggleMiniBrowserSize() {
+        val params = miniBrowserView.layoutParams as ViewGroup.MarginLayoutParams
+        val density = resources.displayMetrics.density
+        miniBrowserEnlarged = !miniBrowserEnlarged
+        params.height = if (miniBrowserEnlarged) (280 * density).toInt() else (105 * density).toInt()
+        miniBrowserView.layoutParams = params
+    }
+
+    private fun openFullscreenBrowser() {
+        val intent = Intent(this, BrowserFullscreenActivity::class.java)
+        intent.putExtra("url", lastBrowserUrl)
+        startActivity(intent)
     }
 
     // \u0636\u063A\u0637\u062A\u064A\u0646 \u0639\u0644\u0649 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0635\u063A\u064A\u0631\u0629: \u062A\u0643\u0628\u0631/\u062A\u0631\u062C\u0639 \u0644\u062D\u062C\u0645\u0647\u0627 \u0627\u0644\u0623\u0635\u0644\u064A
@@ -1615,9 +1855,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         val number = pc.getString(
                             pc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
                         )
-                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
-                        startActivity(dialIntent)
-                        respond("\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0628\u0640 $name")
+                        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+                            != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            ActivityCompat.requestPermissions(
+                                this, arrayOf(Manifest.permission.CALL_PHONE), REQ_PERMISSIONS
+                            )
+                            respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0637\u0644\u0628 \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0623\u0648\u0644")
+                            return@use
+                        }
+                        try {
+                            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
+                            respond("\u0646\u062A\u0635\u0644 \u0628\u0640 $name")
+                        } catch (e: Exception) {
+                            log("\u062E\u0637\u0623 \u0627\u0644\u0627\u062A\u0635\u0627\u0644: ${e.message}")
+                            respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062A\u0635\u0644")
+                        }
                     } else {
                         respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u0631\u0642\u0645 \u0647\u0627\u062A\u0641 \u0644\u0640 $name")
                     }
@@ -2014,6 +2267,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             miniMapView.onPause()
             miniMapView.pauseTimers()
         }
+        if (::miniBrowserView.isInitialized) {
+            miniBrowserView.onPause()
+            miniBrowserView.pauseTimers()
+        }
         if (::jarvisDial.isInitialized) {
             jarvisDial.pauseAnimation()
         }
@@ -2028,6 +2285,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             miniMapView.onResume()
             miniMapView.resumeTimers()
         }
+        if (::miniBrowserView.isInitialized) {
+            miniBrowserView.onResume()
+            miniBrowserView.resumeTimers()
+        }
         // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
         if (continuousMode) {
             startListening()
@@ -2040,6 +2301,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         clockHandler.removeCallbacksAndMessages(null)
         if (::miniMapView.isInitialized) {
             miniMapView.destroy()
+        }
+        if (::miniBrowserView.isInitialized) {
+            miniBrowserView.destroy()
         }
         tts.shutdown()
         stopMusic()
