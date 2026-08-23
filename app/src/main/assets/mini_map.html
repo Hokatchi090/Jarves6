@@ -29,7 +29,15 @@
 
   #map {
     width: 100%; height: 100%;
-    filter: invert(1) hue-rotate(155deg) saturate(2.4) brightness(0.85) contrast(1.15);
+    display: none;
+  }
+
+  #cyanTint {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(30, 140, 160, 0.28);
+    pointer-events: none;
+    z-index: 400;
     display: none;
   }
 
@@ -69,6 +77,7 @@
 <div id="ring">
   <div id="map"></div>
   <canvas id="fallbackCanvas"></canvas>
+  <div id="cyanTint"></div>
 </div>
 <div id="centerDot"></div>
 <div id="statusLabel">NO SIGNAL</div>
@@ -83,6 +92,7 @@ var lastLon = null;
 function initLeafletMap(lat, lon) {
   if (map) return;
   document.getElementById('map').style.display = 'block';
+  document.getElementById('cyanTint').style.display = 'block';
   map = L.map('map', {
     zoomControl: false,
     attributionControl: false,
@@ -91,8 +101,9 @@ function initLeafletMap(lat, lon) {
     doubleClickZoom: false
   }).setView([lat, lon], 15);
 
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    subdomains: 'abcd'
   }).addTo(map);
 
   marker = L.circleMarker([lat, lon], {
