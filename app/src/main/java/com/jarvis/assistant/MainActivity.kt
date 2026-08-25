@@ -30,6 +30,7 @@ import android.app.Dialog
 import android.widget.FrameLayout
 import android.graphics.Color
 import android.graphics.Typeface
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -85,6 +86,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var lastKnownLat = 0.0
     private var lastKnownLon = 0.0
     private var lastBrowserUrl = "https://www.google.com"
+    private var lastQueuedUtteranceId: String? = null
+
+    // ---- \u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0623\u062F\u0627\u0621: \u064A\u0639\u062F FPS \u0627\u0644\u062D\u0642\u064A\u0642\u064A\u0629 \u0639\u0628\u0631 Choreographer \u0648\u064A\u0639\u0631\u0636 \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0630\u0627\u0643\u0631\u0629. \u064A\u0634\u062A\u063A\u0644 \u0641\u0642\u0637 \u0641\u064A Debug builds
+    private var frameCount = 0
+    private var lastFpsTimestamp = 0L
+    private var perfMonitorRunning = false
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            frameCount++
+            val now = System.currentTimeMillis()
+            if (lastFpsTimestamp == 0L) lastFpsTimestamp = now
+            if (now - lastFpsTimestamp >= 1000L) {
+                updatePerfMonitorText(frameCount)
+                frameCount = 0
+                lastFpsTimestamp = now
+            }
+            if (perfMonitorRunning) {
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+    }
 
     // \u062C\u0633\u0631 JavaScript <-> Kotlin \u062E\u0627\u0635 \u0628\u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631
     inner class BrowserBridgeInterface {
@@ -113,14 +135,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
-    private var userName: String = "Mohamed youcef"
-    private var userEmail: String = "youcefakram4@gmail.com"
-    private var userPhone: String = "0775540495"
+    private var userName: String = ""
+    private var userEmail: String = ""
+    private var userPhone: String = ""
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
     private val client = OkHttpClient()
     private val playlistManager by lazy { PlaylistManager(this) }
     private val notesManager by lazy { NotesManager(this) }
+    private val bluetoothHelper by lazy { BluetoothManagerHelper(this) }
+    private val nfcHelper by lazy { NfcHelper(this) }
+    private val securityScanner by lazy { SecurityScanner(this) }
+    private var defenseModeActive = false
+    private val cloudSync by lazy {
+        val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+        CloudSyncManager(deviceId ?: "unknown_device")
+    }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Gemini: \u064A\u062C\u064A \u0645\u0646 BuildConfig (\u0645\u0635\u062F\u0631\u0647 local.properties \u0623\u0648 GitHub Secrets) ----
     // \u0644\u0627 \u062A\u062D\u0637 \u0627\u0644\u0645\u0641\u062A\u0627\u062D \u0647\u0646\u0627 \u0623\u0628\u062F\u0627\u064B. \u0634\u0648\u0641 \u0645\u0644\u0641 local.properties.example
@@ -249,6 +279,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
                 override fun onDone(utteranceId: String?) {
                     runOnUiThread {
+                        if (utteranceId != null && utteranceId != lastQueuedUtteranceId) return@runOnUiThread
                         if (::jarvisDial.isInitialized) {
                             jarvisDial.setSpeaking(false)
                         }
@@ -337,6 +368,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             if (currentLangCode == "ar") "ar-DZ" else currentLangCode
         )
         intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        // \u0646\u0632\u064A\u062F \u0645\u062F\u0629 \u0627\u0644\u0635\u0645\u062A \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0628\u064A\u0647\u0627 \u0642\u0628\u0644 \u0645\u0627 \u064A\u0639\u062A\u0628\u0631 \u0627\u0644\u062C\u0647\u0627\u0632 \u0623\u0646\u0643 \u0643\u0645\u0644\u062A \u2014 \u0647\u0630\u0627 \u064A\u0645\u0646\u0639 \u0627\u0646\u0642\u0637\u0627\u0639 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0645\u0628\u0643\u0651\u0631 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0641\u0643\u064A\u0631
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000L)
+        // \u0646\u0637\u0644\u0628 \u0639\u062F\u0629 \u0627\u062D\u062A\u0645\u0627\u0644\u0627\u062A \u0628\u062F\u0644 \u0648\u0627\u062D\u062F\u060C \u0647\u0630\u0627 \u064A\u0632\u064A\u062F \u0641\u0631\u0635\u0629 \u0641\u0647\u0645 \u0627\u0644\u0623\u0645\u0631 \u0644\u0648 \u0627\u0644\u0623\u0641\u0636\u0644 \u0645\u0627\u0637\u0627\u0628\u0642\u0634 \u062D\u0631\u0641\u064A\u0627\u064B
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
         try {
             speechRecognizer?.startListening(intent)
         } catch (e: Exception) {
@@ -444,11 +481,21 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    // \u064A\u0648\u062D\u0651\u062F \u0623\u0634\u0643\u0627\u0644 \u0627\u0644\u062D\u0631\u0648\u0641 \u0627\u0644\u0645\u062A\u0642\u0627\u0631\u0628\u0629 (\u0623/\u0625/\u0622 -> \u0627\u060C \u0649 -> \u064A) \u0644\u0623\u0646 \u0627\u0644\u062A\u0639\u0631\u0641 \u0627\u0644\u0635\u0648\u062A\u064A \u0642\u062F \u064A\u0631\u062C\u0639 \u0635\u064A\u063A\u0627\u064B \u0645\u062E\u062A\u0644\u0641\u0629 \u0644\u0646\u0641\u0633 \u0627\u0644\u0643\u0644\u0645\u0629
+    private fun normalizeArabic(text: String): String {
+        return text
+            .replace('\u0623', '\u0627')
+            .replace('\u0625', '\u0627')
+            .replace('\u0622', '\u0627')
+            .replace('\u0649', '\u064A')
+            .replace(Regex("[\u064B-\u0652]"), "")
+    }
+
     private fun handleCommandInternal(text: String) {
-        val cmd = text.lowercase(Locale("ar")).trim()
+        val cmd = normalizeArabic(text.lowercase(Locale("ar")).trim())
 
         when {
-            cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") || cmd.contains("\u0627\u0628\u062F\u0623 \u0645\u062D\u0627\u0636\u0631\u0629") ||
+            cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") || cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") ||
                     cmd.contains("\u0633\u062C\u0644 \u0645\u062D\u0627\u0636\u0631\u0629") -> {
                 startLectureMode()
             }
@@ -468,7 +515,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     respond("\u0645\u0627 \u062A\u0642\u0644\u064A \u0627\u0633\u0645\u0643 \u0644\u0633\u0627\u060C \u0642\u0644\u064A \u0627\u0633\u0645\u064A \u0641\u0644\u0627\u0646")
                 }
             }
-            cmd.contains("\u0627\u0646\u0633\u0649 \u0627\u0633\u0645\u064A") -> {
+            cmd.contains("\u0627\u0646\u0633\u064A \u0627\u0633\u0645\u064A") -> {
                 userName = ""
                 getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
                     .remove("user_name").apply()
@@ -492,27 +539,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             cmd.contains("\u063A\u064A\u0631 \u0627\u0644\u0644\u063A\u0629") || cmd.contains("change language") || cmd.contains("changer la langue") -> {
                 handleLanguageSwitch(cmd)
             }
-            cmd.contains("\u0634\u063A\u0644 \u0645\u0648\u0633\u064A\u0642\u0649") || cmd.contains("\u0634\u063A\u0644 \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649") ||
+            cmd.contains("\u0634\u063A\u0644 \u0645\u0648\u0633\u064A\u0642\u064A") || cmd.contains("\u0634\u063A\u0644 \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u064A") ||
                     cmd.contains("play music") || cmd.contains("joue de la musique") ||
                     cmd.contains("lance la musique") -> {
                 playMusic()
                 respond(musicOnPhrases.random())
             }
-            cmd.contains("\u0648\u0642\u0641 \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649") || cmd.contains("\u0637\u0641\u064A \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649") ||
+            cmd.contains("\u0648\u0642\u0641 \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u064A") || cmd.contains("\u0637\u0641\u064A \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u064A") ||
                     cmd.contains("stop music") || cmd.contains("arr\u00EAte la musique") -> {
                 stopMusic()
                 respond(musicOffPhrases.random())
             }
-            cmd.contains("\u0634\u063A\u0644 \u0627\u063A\u0646\u064A\u0629") || cmd.contains("\u0634\u063A\u0644 \u0623\u063A\u0646\u064A\u0629") -> {
+            cmd.contains("\u0634\u063A\u0644 \u0627\u063A\u0646\u064A\u0629") || cmd.contains("\u0634\u063A\u0644 \u0627\u063A\u0646\u064A\u0629") -> {
                 val name = extractNameAfter(cmd, "\u0627\u063A\u0646\u064A\u0629").ifBlank { extractNameAfter(cmd, "\u0623\u063A\u0646\u064A\u0629") }
                 playSongByName(name)
             }
-            cmd.contains("\u0627\u0644\u0627\u063A\u0646\u064A\u0629 \u0627\u0644\u0644\u064A \u0628\u0639\u062F\u0647\u0627") || cmd.contains("\u0627\u0644\u0623\u063A\u0646\u064A\u0629 \u0627\u0644\u0644\u064A \u0628\u0639\u062F\u0647\u0627") ||
+            cmd.contains("\u0627\u0644\u0627\u063A\u0646\u064A\u0629 \u0627\u0644\u0644\u064A \u0628\u0639\u062F\u0647\u0627") || cmd.contains("\u0627\u0644\u0627\u063A\u0646\u064A\u0629 \u0627\u0644\u0644\u064A \u0628\u0639\u062F\u0647\u0627") ||
                     cmd.contains("\u0627\u0644\u0627\u063A\u0646\u064A\u0629 \u0627\u0644\u062C\u0627\u064A\u0629") || cmd.contains("\u0627\u063A\u0646\u064A\u0629 \u0628\u0639\u062F\u0647\u0627") ||
                     cmd.contains("\u0627\u0644\u062A\u0627\u0644\u064A") -> {
                 playNextInPlaylist()
             }
-            cmd.contains("\u0636\u064A\u0641 \u0627\u063A\u0646\u064A\u0629") || cmd.contains("\u0636\u064A\u0641 \u0623\u063A\u0646\u064A\u0629") -> {
+            cmd.contains("\u0636\u064A\u0641 \u0627\u063A\u0646\u064A\u0629") || cmd.contains("\u0636\u064A\u0641 \u0627\u063A\u0646\u064A\u0629") -> {
                 val name = extractNameAfter(cmd, "\u0627\u063A\u0646\u064A\u0629").ifBlank { extractNameAfter(cmd, "\u0623\u063A\u0646\u064A\u0629") }
                 addSongToPlaylist(name)
             }
@@ -548,7 +595,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val name = extractNameAfter(cmd, "\u0627\u062A\u0635\u0644 \u0628")
                 callContact(name)
             }
-            cmd.contains("\u0627\u064A\u0645\u064A\u0644\u064A") || cmd.contains("\u0628\u0631\u064A\u062F\u064A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A") -> {
+            cmd.contains("\u0627\u064A\u0645\u064A\u0644\u064A") || cmd.contains("\u0628\u0631\u064A\u062F\u064A \u0627\u0644\u0627\u0644\u0643\u062A\u0631\u0648\u0646\u064A") -> {
                 val marker = if (cmd.contains("\u0627\u064A\u0645\u064A\u0644\u064A")) "\u0627\u064A\u0645\u064A\u0644\u064A" else "\u0628\u0631\u064A\u062F\u064A \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A"
                 val email = extractNameAfter(cmd, marker)
                 if (email.isNotBlank()) {
@@ -575,6 +622,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
             cmd.contains("\u0627\u0642\u0631\u0627 \u0631\u0633\u0627\u0626\u0644\u064A") || cmd.contains("\u0631\u0633\u0627\u0626\u0644\u064A \u0627\u0644\u062C\u062F\u064A\u062F\u0629") -> {
                 handleReadMessages()
+            }
+            cmd.contains("\u062F\u0648\u0631 \u0639\u0644\u064A \u0627\u062C\u0647\u0632\u0629 \u0628\u0644\u0648\u062A\u0648\u062B") || cmd.contains("\u0627\u0643\u062A\u0634\u0641 \u0628\u0644\u0648\u062A\u0648\u062B") -> {
+                scanBluetoothDevices()
+            }
+            (cmd.contains("\u0648\u0636\u0639") && cmd.contains("\u062F\u0641\u0627\u0639")) || cmd.contains("\u0641\u0639\u0644 \u0627\u0644\u062F\u0641\u0627\u0639") -> {
+                toggleDefenseMode(true)
+            }
+            cmd.contains("\u0627\u0644\u063A\u064A \u0627\u0644\u062F\u0641\u0627\u0639") || cmd.contains("\u0637\u0641\u064A \u0627\u0644\u062F\u0641\u0627\u0639") -> {
+                toggleDefenseMode(false)
+            }
+            (cmd.contains("\u0641\u062D\u0635") && cmd.contains("\u0635\u0644\u0627\u062D\u064A\u0627\u062A")) || cmd.contains("\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062E\u0637\u064A\u0631\u0629") -> {
+                runSecurityScan()
+            }
+            cmd.contains("\u0627\u062D\u0641\u0638") && cmd.contains("\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u064A") && cmd.contains("\u0633\u062D\u0627\u0628\u0629") -> {
+                backupNotesToCloud()
+            }
+            cmd.contains("\u0627\u0633\u062A\u0631\u062C\u0639") && cmd.contains("\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u064A") && cmd.contains("\u0633\u062D\u0627\u0628\u0629") -> {
+                restoreNotesFromCloud()
             }
             cmd.contains("\u0627\u0634\u0631\u062D") && cmd.contains("\u0631\u0633\u0627\u0644\u0629") -> {
                 handleExplainLastMessage()
@@ -683,17 +748,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             cmd.contains("\u0645\u0646\u0628\u0647 \u0627\u0644\u0633\u0627\u0639\u0629") || cmd.contains("\u062D\u0637 \u0645\u0646\u0628\u0647") -> {
                 handleSetAlarm(cmd)
             }
-            cmd.contains("\u0627\u0628\u062D\u062B \u0639\u0646") || cmd.contains("\u062F\u0648\u0631 \u0644\u064A \u0639\u0644\u0649") -> {
+            cmd.contains("\u0627\u0628\u062D\u062B \u0639\u0646") || cmd.contains("\u062F\u0648\u0631 \u0644\u064A \u0639\u0644\u064A") -> {
                 val query = extractSearchQuery(cmd)
                 searchGoogle(query)
             }
-            cmd.contains("\u0637\u0631\u064A\u0642 \u0645\u0634\u064A") || cmd.contains("\u0627\u0645\u0634\u064A \u0627\u0644\u0649") ||
-                    cmd.contains("\u0627\u0645\u0634\u064A \u0644") || cmd.contains("\u0645\u0634\u064A \u0627\u0644\u0649") -> {
+            cmd.contains("\u0637\u0631\u064A\u0642 \u0645\u0634\u064A") || cmd.contains("\u0627\u0645\u0634\u064A \u0627\u0644\u064A") ||
+                    cmd.contains("\u0627\u0645\u0634\u064A \u0644") || cmd.contains("\u0645\u0634\u064A \u0627\u0644\u064A") -> {
                 val place = extractNameAfter(cmd, "\u0627\u0644\u0649")
                 navigateTo(place, "walking")
             }
-            cmd.contains("\u0648\u062F\u0651\u064A\u0646\u064A \u0627\u0644\u0649") || cmd.contains("\u0648\u062F\u064A\u0646\u064A \u0627\u0644\u0649") ||
-                    cmd.contains("\u062E\u0630\u0646\u064A \u0627\u0644\u0649") || cmd.contains("\u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u0649") -> {
+            cmd.contains("\u0648\u062F\u0651\u064A\u0646\u064A \u0627\u0644\u064A") || cmd.contains("\u0648\u062F\u064A\u0646\u064A \u0627\u0644\u064A") ||
+                    cmd.contains("\u062E\u0630\u0646\u064A \u0627\u0644\u064A") || cmd.contains("\u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u064A") -> {
                 val place = extractNameAfter(cmd, "\u0627\u0644\u0649")
                 navigateTo(place)
             }
@@ -718,7 +783,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             cmd.contains("\u0627\u0641\u062A\u062D \u062A\u064A\u0643 \u062A\u0648\u0643") || cmd.contains("open tiktok") -> {
                 openApp("com.zhiliaoapp.musically", "\u062A\u064A\u0643 \u062A\u0648\u0643")
             }
-            cmd.contains("\u0627\u0641\u062A\u062D \u062A\u0648\u064A\u062A\u0631") || cmd.contains("\u0627\u0641\u062A\u062D \u0625\u0643\u0633") || cmd.contains("open twitter") -> {
+            cmd.contains("\u0627\u0641\u062A\u062D \u062A\u0648\u064A\u062A\u0631") || cmd.contains("\u0627\u0641\u062A\u062D \u0627\u0643\u0633") || cmd.contains("open twitter") -> {
                 openApp("com.twitter.android", "\u062A\u0648\u064A\u062A\u0631")
             }
             cmd.contains("\u0627\u0641\u062A\u062D \u062E\u0631\u0627\u0626\u0637") || cmd.contains("open maps") -> {
@@ -741,7 +806,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             }
             (cmd.contains("\u0645\u0633\u0627\u0641\u0629") || cmd.contains("\u0645\u0633\u0627\u0641\u0647")) &&
-                    (cmd.contains("\u0627\u0644\u0649") || cmd.contains("\u0625\u0644\u0649")) -> {
+                    (cmd.contains("\u0627\u0644\u064A") || cmd.contains("\u0627\u0644\u064A")) -> {
                 handleDistanceQuery(cmd)
             }
             else -> {
@@ -1411,6 +1476,157 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // \u062E\u0631\u064A\u0637\u0629 \u0627\u0633\u0645 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 -> \u0627\u0633\u0645 \u0627\u0644\u062D\u0632\u0645\u0629\u060C \u062A\u062A\u0645\u0644\u0627 \u0645\u0644\u064A \u0646\u0641\u062A\u062D\u0648 \u0642\u0627\u0626\u0645\u0629 APPS
     private val appNameToPackage = mutableMapOf<String, String>()
 
+    // ---------------- Security: defense mode + permission scanner ----------------
+
+    private fun toggleDefenseMode(active: Boolean) {
+        defenseModeActive = active
+        if (::jarvisDial.isInitialized) {
+            jarvisDial.setDefenseMode(active)
+        }
+        if (active) {
+            val battery = securityScanner.getBatteryPercent()
+            val memory = securityScanner.getMemoryUsagePercent()
+            respond("\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639 \u0645\u0641\u0639\u0651\u0644. \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629 $battery\u066A\u060C \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0630\u0627\u0643\u0631\u0629 $memory\u066A")
+        } else {
+            respond("\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639 \u0645\u0637\u0641\u0651\u0649")
+        }
+    }
+
+    private fun runSecurityScan() {
+        respond("\u0646\u0641\u062D\u0635 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0648\u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A...")
+        Thread {
+            val riskyApps = securityScanner.scanInstalledApps()
+            val devOptionsOn = securityScanner.isDeveloperOptionsEnabled()
+            runOnUiThread {
+                if (riskyApps.isEmpty()) {
+                    respond("\u0645\u0627\u0644\u0642\u064A\u062A \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0639\u0646\u062F\u0647\u0627 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u062D\u0633\u0627\u0633\u0629 \u0645\u0645\u064A\u0632\u0629")
+                } else {
+                    val top = riskyApps.take(3).joinToString(". ") { app ->
+                        "${app.appName}: " + app.riskyPermissions.joinToString("\u060C ")
+                    }
+                    respond("\u0644\u0642\u064A\u062A ${riskyApps.size} \u062A\u0637\u0628\u064A\u0642 \u0639\u0646\u062F\u0647\u0627 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u062D\u0633\u0627\u0633\u0629. \u0623\u0628\u0631\u0632\u0647\u0627: $top")
+                }
+                if (devOptionsOn) {
+                    log("\u062A\u0646\u0628\u064A\u0647: \u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0637\u0648\u0631\u064A\u0646/USB Debugging \u0645\u0641\u0639\u0651\u0644\u0629 \u0639\u0644\u0649 \u0627\u0644\u062C\u0647\u0627\u0632")
+                }
+            }
+        }.start()
+    }
+
+    // ---------------- Bluetooth ----------------
+
+    private fun scanBluetoothDevices() {
+        if (!bluetoothHelper.isBluetoothAvailable()) {
+            respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 Bluetooth")
+            return
+        }
+        if (!bluetoothHelper.isBluetoothEnabled()) {
+            respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0634\u063A\u0644 Bluetooth \u0623\u0648\u0644")
+            return
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0637\u0644\u0628 \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0645\u0648\u0642\u0639 \u0623\u0648\u0644 (\u0644\u0627\u0632\u0645\u0629 \u0644\u0644\u0628\u062D\u062B \u0639\u0646 Bluetooth)")
+            requestNeededPermissions()
+            return
+        }
+        respond("\u0646\u062F\u0648\u0631 \u0639\u0644\u0649 \u0623\u062C\u0647\u0632\u0629 Bluetooth \u0642\u0631\u064A\u0628\u0629")
+        bluetoothHelper.startScan(
+            durationMs = 6000L,
+            onDeviceFound = { },
+            onFinished = { devices ->
+                runOnUiThread {
+                    if (devices.isEmpty()) {
+                        respond("\u0645\u0627\u0644\u0642\u064A\u062A \u0623\u064A \u062C\u0647\u0627\u0632 \u0642\u0631\u064A\u0628")
+                    } else {
+                        val names = devices.take(5).joinToString("\u060C ") { it.name }
+                        respond("\u0644\u0642\u064A\u062A ${devices.size} \u062C\u0647\u0627\u0632: $names")
+                    }
+                }
+            }
+        )
+    }
+
+    // ---------------- Free cloud backup (Supabase) ----------------
+
+    private fun backupNotesToCloud() {
+        if (!cloudSync.isConfigured()) {
+            respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
+            return
+        }
+        val notes = notesManager.getAll()
+        val json = JSONArray(notes.toList()).toString()
+        respond("\u0646\u062D\u0641\u0638 \u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+        cloudSync.backup("notes", json) { success, error ->
+            runOnUiThread {
+                if (success) {
+                    respond("\u062A\u0645 \u0627\u0644\u062D\u0641\u0638 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+                } else {
+                    log("\u062E\u0637\u0623 \u0627\u0644\u0646\u0633\u062E \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A: $error")
+                    respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062D\u0641\u0638 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+                }
+            }
+        }
+    }
+
+    private fun restoreNotesFromCloud() {
+        if (!cloudSync.isConfigured()) {
+            respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
+            return
+        }
+        respond("\u0646\u062C\u064A\u0628 \u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+        cloudSync.restore("notes") { success, result ->
+            runOnUiThread {
+                if (success && result != null) {
+                    try {
+                        val arr = JSONArray(result)
+                        for (i in 0 until arr.length()) {
+                            notesManager.save(arr.getString(i))
+                        }
+                        respond("\u062A\u0645 \u0627\u0633\u062A\u0631\u062C\u0627\u0639 ${arr.length()} \u0645\u0644\u0627\u062D\u0638\u0629 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+                    } catch (e: Exception) {
+                        log("\u062E\u0637\u0623 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629: ${e.message}")
+                        respond("\u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629 \u062A\u0627\u0644\u0641\u0629")
+                    }
+                } else {
+                    respond("\u0645\u0627\u0644\u0642\u064A\u062A \u0646\u0633\u062E\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+                }
+            }
+        }
+    }
+
+    // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
+
+    private fun startPerfMonitor() {
+        if (!BuildConfig.DEBUG) return
+        val monitor = findViewById<TextView>(R.id.perfMonitor)
+        monitor.visibility = View.VISIBLE
+        if (perfMonitorRunning) return
+        perfMonitorRunning = true
+        frameCount = 0
+        lastFpsTimestamp = 0L
+        Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    private fun stopPerfMonitor() {
+        perfMonitorRunning = false
+        findViewById<TextView>(R.id.perfMonitor)?.visibility = View.GONE
+    }
+
+    private fun updatePerfMonitorText(fps: Int) {
+        if (!BuildConfig.DEBUG) return
+        val runtime = Runtime.getRuntime()
+        val usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+        val monitor = findViewById<TextView>(R.id.perfMonitor)
+        monitor.text = "FPS: $fps | MEM: $usedMb MB"
+        if (fps in 1..24) {
+            monitor.setTextColor(android.graphics.Color.parseColor("#E07A5F"))
+        } else {
+            monitor.setTextColor(android.graphics.Color.parseColor("#4A808A"))
+        }
+    }
+
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
 
     private fun setupSidebarUi() {
@@ -1522,7 +1738,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
-        }
+          }
         // \u0625\u0630\u0627 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0629 \u0645\u0645\u0646\u0648\u062D\u0629 \u0645\u0646 \u0642\u0628\u0644\u060C \u0646\u062C\u064A\u0628 \u0627\u0644\u0645\u0648\u0642\u0639 \u0645\u0628\u0627\u0634\u0631\u0629 \u0628\u0627\u0634 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0635\u063A\u064A\u0631\u0629 \u062A\u0628\u064A\u0646 \u0645\u0646 \u0623\u0648\u0644 \u0641\u062A\u062D\u0629
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED
@@ -2249,12 +2465,64 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun respond(text: String) {
         log("\u062C\u0627\u0631\u0641\u0633: $text")
         speechRecognizer?.stopListening()
-        val utteranceId = "jarvis_${System.currentTimeMillis()}"
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+
+        // \u0644\u0645\u062D\u0631\u0643\u0627\u062A TTS \u062D\u062F \u0623\u0642\u0635\u0649 \u0644\u0637\u0648\u0644 \u0627\u0644\u0646\u0635 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621 \u0627\u0644\u0648\u0627\u062D\u062F \u2014 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 (\u0645\u062B\u0644 \u0631\u062F\u0648\u062F Gemini) \u0643\u0627\u0646 \u064A\u062A\u0642\u0637\u0639 \u0628\u0635\u0645\u062A. \u0646\u0642\u0633\u0651\u0645\u0647 \u0644\u062C\u0645\u0644 \u0648\u0646\u0631\u0633\u0644\u0647\u0645 \u0648\u0627\u062D\u062F \u0628\u0648\u0627\u062D\u062F
+        val maxLen = try {
+            tts.maxSpeechInputLength.takeIf { it > 0 } ?: 3800
+        } catch (e: Exception) {
+            3800
+        }
+        val chunks = splitTextForSpeech(text, maxLen)
+        val utteranceIds = chunks.indices.map { "jarvis_${System.currentTimeMillis()}_$it" }
+        lastQueuedUtteranceId = utteranceIds.lastOrNull()
+        chunks.forEachIndexed { index, chunk ->
+            val mode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            tts.speak(chunk, mode, null, utteranceIds[index])
+        }
+    }
+
+    // \u064A\u0642\u0633\u0651\u0645 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 \u0639\u0644\u0649 \u062D\u062F\u0648\u062F \u0627\u0644\u062C\u0645\u0644 \u0642\u062F\u0631 \u0627\u0644\u0625\u0645\u0643\u0627\u0646 (\u0645\u0627 \u064A\u0642\u0637\u0639\u0634 \u0641\u064A \u0646\u0635 \u0643\u0644\u0645\u0629) \u0628\u062F\u0648\u0646 \u0645\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 maxLen
+    private fun splitTextForSpeech(text: String, maxLen: Int): List<String> {
+        if (text.length <= maxLen) return listOf(text)
+        val sentences = text.split(Regex("(?<=[.!?\u061F\u060C])\\s+"))
+        val chunks = mutableListOf<String>()
+        val current = StringBuilder()
+        for (sentence in sentences) {
+            if (current.length + sentence.length + 1 > maxLen) {
+                if (current.isNotEmpty()) {
+                    chunks.add(current.toString().trim())
+                    current.clear()
+                }
+                if (sentence.length > maxLen) {
+                    // \u062C\u0645\u0644\u0629 \u0648\u0627\u062D\u062F\u0629 \u0623\u0637\u0648\u0644 \u0645\u0646 maxLen \u0646\u0641\u0633\u0647\u0627: \u0646\u0642\u0637\u0639\u0647\u0627 \u0642\u0633\u0631\u064A\u0627\u064B
+                    var start = 0
+                    while (start < sentence.length) {
+                        val end = minOf(start + maxLen, sentence.length)
+                        chunks.add(sentence.substring(start, end))
+                        start = end
+                    }
+                } else {
+                    current.append(sentence)
+                }
+            } else {
+                current.append(sentence).append(" ")
+            }
+        }
+        if (current.isNotEmpty()) chunks.add(current.toString().trim())
+        return chunks.filter { it.isNotBlank() }
     }
 
     private fun log(text: String) {
         logText.append("\n\n$text")
+    }
+
+    // \u064A\u062A\u0645 \u0627\u0633\u062A\u062F\u0639\u0627\u0624\u0647 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0645\u0644\u064A \u064A\u0642\u062A\u0631\u0628 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u062E\u0627\u0635\u064A\u0629 \u0627\u0644\u0647\u0627\u062A\u0641 \u0645\u0646 \u0628\u0637\u0627\u0642\u0629 NFC (\u0628\u0641\u0636\u0644 enableForegroundDispatch)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val tagContent = nfcHelper.readTagFromIntent(intent)
+        if (tagContent != null) {
+            respond("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0628\u0637\u0627\u0642\u0629: $tagContent")
+        }
     }
 
     override fun onPause() {
@@ -2271,6 +2539,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             miniBrowserView.onPause()
             miniBrowserView.pauseTimers()
         }
+        stopPerfMonitor()
+        nfcHelper.disableForegroundDispatch()
         if (::jarvisDial.isInitialized) {
             jarvisDial.pauseAnimation()
         }
@@ -2289,6 +2559,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             miniBrowserView.onResume()
             miniBrowserView.resumeTimers()
         }
+        startPerfMonitor()
+        nfcHelper.enableForegroundDispatch()
         // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
         if (continuousMode) {
             startListening()
