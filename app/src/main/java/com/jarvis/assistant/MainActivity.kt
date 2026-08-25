@@ -132,6 +132,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         fun onTripleTap() {
             runOnUiThread { openFullscreenMap() }
         }
+
+        // \u064A\u0646\u0627\u062F\u064A\u0647 mini_map.html \u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0641\u0642\u0637 \u0623\u0648\u0644 \u0645\u0627 \u062A\u0646\u062C\u062D \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0641\u064A \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0645\u0648\u0642\u0639 ("online" = \u062E\u0631\u064A\u0637\u0629 \u062D\u0642\u064A\u0642\u064A\u0629\u060C "offline" = \u0631\u0633\u0645 \u0628\u062F\u064A\u0644 \u0645\u062D\u0644\u064A)
+        @JavascriptInterface
+        fun onStatusChange(status: String) {
+            runOnUiThread {
+                if (status == "online") {
+                    respond("\u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0645\u062A\u0635\u0644\u0629 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0648\u062A\u0648\u0631\u064A \u0645\u0648\u0642\u0639\u0643 \u0627\u0644\u062D\u0642\u064A\u0642\u064A")
+                } else {
+                    respond("\u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0645\u0627\u0644\u0642\u0627\u062A\u0634 \u0625\u0646\u062A\u0631\u0646\u062A\u060C \u0631\u0627\u0647\u064A \u062A\u0634\u062A\u063A\u0644 \u0628\u0648\u0636\u0639 \u0627\u0644\u0623\u0648\u0641\u0644\u0627\u064A\u0646")
+                }
+            }
+        }
     }
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
@@ -147,6 +159,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val nfcHelper by lazy { NfcHelper(this) }
     private val securityScanner by lazy { SecurityScanner(this) }
     private var defenseModeActive = false
+    private val irRemote by lazy { IrRemoteHelper(this) }
+    private val usageTracker by lazy { UsagePatternTracker(this) }
     private val cloudSync by lazy {
         val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
         CloudSyncManager(deviceId ?: "unknown_device")
@@ -302,7 +316,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             } else {
                 "Jarvis at your service, what can I do today?"
             }
-            respond(greeting)
+            val suggestion = usageTracker.getTopSuggestionForNow()
+            val fullGreeting = if (suggestion != null) {
+                "$greeting \u0628\u0627\u0644\u0645\u0646\u0627\u0633\u0628\u0629\u060C \u0639\u0627\u062F\u062A\u0643 \u062A\u0642\u0648\u0644 \"$suggestion\" \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0648\u0642\u062A\u060C \u062A\u062D\u0628 \u0646\u062F\u064A\u0631\u0647\u0627\u061F"
+            } else {
+                greeting
+            }
+            respond(fullGreeting)
         }
     }
 
@@ -493,6 +513,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun handleCommandInternal(text: String) {
         val cmd = normalizeArabic(text.lowercase(Locale("ar")).trim())
+        usageTracker.recordCommand(cmd)
 
         when {
             cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") || cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") ||
@@ -634,6 +655,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
             (cmd.contains("\u0641\u062D\u0635") && cmd.contains("\u0635\u0644\u0627\u062D\u064A\u0627\u062A")) || cmd.contains("\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0627\u0644\u062E\u0637\u064A\u0631\u0629") -> {
                 runSecurityScan()
+            }
+            cmd.contains("\u0631\u064A\u0645\u0648\u062A") && (cmd.contains("\u062A\u0644\u0641\u0632\u064A\u0648\u0646") || cmd.contains("\u0634\u063A\u0644") || cmd.contains("\u0637\u0641\u064A")) -> {
+                sendIrCommand("power")
+            }
+            cmd.contains("\u0631\u064A\u0645\u0648\u062A") && cmd.contains("\u0643\u0628\u0631") && cmd.contains("\u0635\u0648\u062A") -> {
+                sendIrCommand("volume_up")
+            }
+            cmd.contains("\u0631\u064A\u0645\u0648\u062A") && cmd.contains("\u0646\u0642\u0635") && cmd.contains("\u0635\u0648\u062A") -> {
+                sendIrCommand("volume_down")
             }
             cmd.contains("\u0627\u062D\u0641\u0638") && cmd.contains("\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u064A") && cmd.contains("\u0633\u062D\u0627\u0628\u0629") -> {
                 backupNotesToCloud()
@@ -1476,6 +1506,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // \u062E\u0631\u064A\u0637\u0629 \u0627\u0633\u0645 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 -> \u0627\u0633\u0645 \u0627\u0644\u062D\u0632\u0645\u0629\u060C \u062A\u062A\u0645\u0644\u0627 \u0645\u0644\u064A \u0646\u0641\u062A\u062D\u0648 \u0642\u0627\u0626\u0645\u0629 APPS
     private val appNameToPackage = mutableMapOf<String, String>()
 
+    // ---------------- IR remote control ----------------
+
+    private fun sendIrCommand(action: String) {
+        if (!irRemote.hasIrBlaster()) {
+            respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 \u0645\u0631\u0633\u0644 \u0623\u0634\u0639\u0629 \u062A\u062D\u062A \u0627\u0644\u062D\u0645\u0631\u0627\u0621")
+            return
+        }
+        val sent = when (action) {
+            "power" -> irRemote.sendPowerToggle()
+            "volume_up" -> irRemote.sendVolumeUp()
+            "volume_down" -> irRemote.sendVolumeDown()
+            else -> false
+        }
+        if (sent) {
+            respond("\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0625\u0634\u0627\u0631\u0629 \u0627\u0644\u0631\u064A\u0645\u0648\u062A")
+        } else {
+            respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0631\u0633\u0644 \u0627\u0644\u0625\u0634\u0627\u0631\u0629")
+        }
+    }
+
     // ---------------- Security: defense mode + permission scanner ----------------
 
     private fun toggleDefenseMode(active: Boolean) {
@@ -1738,7 +1788,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
-          }
+        }
         // \u0625\u0630\u0627 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0629 \u0645\u0645\u0646\u0648\u062D\u0629 \u0645\u0646 \u0642\u0628\u0644\u060C \u0646\u062C\u064A\u0628 \u0627\u0644\u0645\u0648\u0642\u0639 \u0645\u0628\u0627\u0634\u0631\u0629 \u0628\u0627\u0634 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0635\u063A\u064A\u0631\u0629 \u062A\u0628\u064A\u0646 \u0645\u0646 \u0623\u0648\u0644 \u0641\u062A\u062D\u0629
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED
