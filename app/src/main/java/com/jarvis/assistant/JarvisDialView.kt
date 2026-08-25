@@ -19,9 +19,25 @@ class JarvisDialView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private val cyan = Color.rgb(65, 224, 244)
-    private val cyanBright = Color.rgb(145, 247, 255)
-    private val white = Color.rgb(235, 250, 252)
+    private var cyan = Color.rgb(65, 224, 244)
+    private var cyanBright = Color.rgb(145, 247, 255)
+    private var white = Color.rgb(235, 250, 252)
+    private var defenseMode = false
+
+    // \u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639: \u064A\u0628\u062F\u0651\u0644 \u0644\u0648\u0646 \u0627\u0644\u0648\u0627\u062C\u0647\u0629 \u0643\u0627\u0645\u0644 \u0645\u0646 \u0627\u0644\u0633\u0645\u0627\u0648\u064A \u0644\u0644\u0623\u062D\u0645\u0631 \u0643\u062A\u0646\u0628\u064A\u0647 \u0628\u0635\u0631\u064A
+    fun setDefenseMode(active: Boolean) {
+        defenseMode = active
+        if (active) {
+            cyan = Color.rgb(224, 65, 65)
+            cyanBright = Color.rgb(255, 120, 120)
+            white = Color.rgb(255, 235, 235)
+        } else {
+            cyan = Color.rgb(65, 224, 244)
+            cyanBright = Color.rgb(145, 247, 255)
+            white = Color.rgb(235, 250, 252)
+        }
+        invalidate()
+    }
 
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
