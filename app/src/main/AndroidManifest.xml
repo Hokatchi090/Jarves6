@@ -11,8 +11,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
     <queries>
         <intent>
@@ -25,10 +32,8 @@
         android:allowBackup="true"
         android:label="Jarvis"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
- <activity android:name=".DesignLabActivity" android:exported="false" />
-        <activity android:name=".MapFullscreenActivity" android:exported="false" />
-        <activity android:name=".BrowserFullscreenActivity" android:exported="false" />
-        
+<activity android:name=".DesignLabActivity" android:exported="false" />
+  
         <activity
             android:name=".MainActivity"
             android:exported="true">
