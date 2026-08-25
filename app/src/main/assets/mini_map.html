@@ -210,6 +210,13 @@ function drawFallback(lat, lon) {
   ctx.fill();
 }
 
+function notifyStatusOnce(status) {
+  if (window.MapBridge && window.MapBridge.onStatusChange && !window.__statusNotified) {
+    window.__statusNotified = true;
+    window.MapBridge.onStatusChange(status);
+  }
+}
+
 function activateFallback() {
   if (mode === 'fallback') return;
   mode = 'fallback';
@@ -217,6 +224,7 @@ function activateFallback() {
   if (lastLat !== null) {
     drawFallback(lastLat, lastLon);
     document.getElementById('statusLabel').textContent = 'LOCKED (OFFLINE)';
+    notifyStatusOnce('offline');
   }
 }
 
@@ -233,6 +241,7 @@ function setCoords(lat, lon) {
         if (marker) marker.setLatLng([lat, lon]);
       }
       document.getElementById('statusLabel').textContent = 'LOCKED';
+      notifyStatusOnce('online');
       return;
     } catch (e) {
       mode = null;
@@ -244,6 +253,7 @@ function setCoords(lat, lon) {
   } else {
     drawFallback(lat, lon);
     document.getElementById('statusLabel').textContent = 'LOCKED (OFFLINE)';
+    notifyStatusOnce('offline');
   }
 }
 
