@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 <style>
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
     background: transparent; overflow: hidden;
   }
 
-  /* \u0627\u0644\u0625\u0637\u0627\u0631 \u0627\u0644\u0645\u0633\u062A\u0637\u064A\u0644: \u0644\u0648\u062D\u0629 \u0632\u062C\u0627\u062C\u064A\u0629 \u0628\u0632\u0648\u0627\u064A\u0627 HUD \u0628\u062F\u0644 \u062F\u0627\u0626\u0631\u0629 \u062A\u062F\u0648\u0631 */
   #panel {
     position: absolute;
     top: 4px; left: 4px; right: 4px; bottom: 4px;
@@ -31,30 +31,16 @@
   #cBL { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
   #cBR { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
-  /* \u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0645\u0634\u0647\u062F: \u062A\u0637\u0628\u064A\u0642 \u0645\u0646\u0638\u0648\u0631 3D \u0628\u0625\u0645\u0627\u0644\u0629 \u0628\u0633\u064A\u0637\u0629 \u062A\u0639\u0637\u064A \u0625\u062D\u0633\u0627\u0633 \u0627\u0644\u0639\u0645\u0642 \u0628\u062F\u0644 \u062E\u0631\u064A\u0637\u0629 \u0645\u0633\u0637\u062D\u0629 */
-  #viewport {
+  #map3d {
     position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
-    perspective: 500px;
-    perspective-origin: 50% 20%;
-  }
-
-  #mapTilt {
-    position: absolute;
-    top: -15%; left: -15%; width: 130%; height: 145%;
-    transform: rotateX(35deg) scale(1.15);
-    transform-origin: 50% 30%;
-  }
-
-  #map {
-    width: 100%; height: 100%;
     display: none;
   }
 
   #cyanTint {
     position: absolute;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(30, 140, 160, 0.22);
+    background: rgba(30, 140, 160, 0.16);
     pointer-events: none;
     z-index: 400;
     display: none;
@@ -65,17 +51,12 @@
     display: block;
   }
 
-  #centerDot {
-    position: absolute;
-    top: 20%; left: 50%;
-    width: 8px; height: 8px;
-    margin: -4px 0 0 -4px;
+  #locDot {
+    width: 14px; height: 14px;
     background: #8ff2fa;
+    border: 2px solid #ffffff;
     border-radius: 50%;
-    box-shadow: 0 0 8px 3px rgba(143, 242, 250, 0.85);
-    z-index: 500;
-    pointer-events: none;
-    display: none;
+    box-shadow: 0 0 10px 4px rgba(143, 242, 250, 0.85);
   }
 
   #statusLabel {
@@ -111,22 +92,24 @@
     z-index: 600;
     pointer-events: none;
   }
+
+  #tapCatcher {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 700;
+  }
 </style>
 </head>
 <body>
 
 <div id="panel">
-  <div id="viewport">
-    <div id="mapTilt">
-      <div id="map"></div>
-      <canvas id="fallbackCanvas"></canvas>
-    </div>
-  </div>
+  <div id="map3d"></div>
+  <canvas id="fallbackCanvas"></canvas>
   <div id="cyanTint"></div>
-  <div id="centerDot"></div>
   <div id="statusLabel">NO SIGNAL</div>
-  <div id="titleLabel">MAP</div>
-  <div id="hintLabel">2x TAP: ENLARGE  |  3x TAP: FULLSCREEN</div>
+  <div id="titleLabel">MAP 3D</div>
+  <div id="hintLabel">2x TAP: ENLARGE | 3x TAP: FULLSCREEN</div>
+  <div id="tapCatcher"></div>
   <div class="corner" id="cTL"></div>
   <div class="corner" id="cTR"></div>
   <div class="corner" id="cBL"></div>
@@ -135,34 +118,94 @@
 
 <script>
 var mode = null;
-var map = null;
-var marker = null;
+var map3d = null;
 var lastLat = null;
 var lastLon = null;
+var rotationTimer = null;
+var currentBearing = 0;
 
-function initLeafletMap(lat, lon) {
-  if (map) return;
-  document.getElementById('map').style.display = 'block';
+// ---------------- \u062E\u0631\u064A\u0637\u0629 3D \u062D\u0642\u064A\u0642\u064A\u0629: MapLibre GL + OpenFreeMap (\u0645\u062C\u0627\u0646\u064A\u0629 \u0628\u0627\u0644\u0643\u0627\u0645\u0644\u060C \u0628\u0644\u0627 \u0645\u0641\u062A\u0627\u062D) ----------------
+function initMap3D(lat, lon) {
+  if (map3d) return;
+  document.getElementById('map3d').style.display = 'block';
   document.getElementById('cyanTint').style.display = 'block';
-  map = L.map('map', {
-    zoomControl: false,
+
+  map3d = new maplibregl.Map({
+    container: 'map3d',
+    style: 'https://tiles.openfreemap.org/styles/dark',
+    center: [lon, lat],
+    zoom: 16.5,
+    pitch: 62,
+    bearing: 0,
     attributionControl: false,
-    dragging: true,
-    scrollWheelZoom: false,
-    doubleClickZoom: false
-  }).setView([lat, lon], 15);
+    interactive: true
+  });
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    subdomains: 'abcd'
-  }).addTo(map);
+  map3d.on('load', function () {
+    // \u0646\u0636\u064A\u0641 \u0637\u0628\u0642\u0629 \u0645\u0628\u0627\u0646\u064A \u062D\u0642\u064A\u0642\u064A\u0629 \u062B\u0644\u0627\u062B\u064A\u0629 \u0627\u0644\u0623\u0628\u0639\u0627\u062F (\u0627\u0631\u062A\u0641\u0627\u0639 \u062D\u0642\u064A\u0642\u064A \u062D\u0633\u0628 \u0627\u0631\u062A\u0641\u0627\u0639 \u0627\u0644\u0645\u0628\u0646\u0649 \u0627\u0644\u0641\u0639\u0644\u064A)
+    try {
+      var layers = map3d.getStyle().layers;
+      var labelLayerId = null;
+      for (var i = 0; i < layers.length; i++) {
+        if (layers[i].type === 'symbol' && layers[i].layout && layers[i].layout['text-field']) {
+          labelLayerId = layers[i].id;
+          break;
+        }
+      }
+      map3d.addLayer({
+        id: '3d-buildings',
+        source: 'openmaptiles',
+        'source-layer': 'building',
+        type: 'fill-extrusion',
+        minzoom: 14,
+        paint: {
+          'fill-extrusion-color': [
+            'interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 8],
+            0, '#173b45',
+            50, '#2f8fa3',
+            150, '#41e0f4'
+          ],
+          'fill-extrusion-height': [
+            'interpolate', ['linear'], ['zoom'],
+            14, 0,
+            16, ['coalesce', ['get', 'render_height'], 8]
+          ],
+          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+          'fill-extrusion-opacity': 0.85
+        }
+      }, labelLayerId || undefined);
+    } catch (e) {
+      // \u0625\u0630\u0627 \u0627\u0644\u0637\u0628\u0642\u0629 \u0645\u0627\u062A\u0648\u0641\u0631\u062A\u0634 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0645\u0635\u062F\u0631\u060C \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u062A\u0628\u0642\u0649 \u062A\u0634\u062A\u063A\u0644 \u0639\u0627\u062F\u064A \u0628\u0644\u0627 \u0645\u0628\u0627\u0646\u064A 3D
+    }
 
-  marker = L.circleMarker([lat, lon], {
-    radius: 6,
-    color: '#41e0f4',
-    fillColor: '#41e0f4',
-    fillOpacity: 0.9
-  }).addTo(map);
+    new maplibregl.Marker({ element: makeLocDot() })
+      .setLngLat([lon, lat])
+      .addTo(map3d);
+
+    // \u062F\u0648\u0631\u0627\u0646 \u0628\u0637\u064A\u0621 \u0648\u0645\u0633\u062A\u0645\u0631 \u0644\u0644\u0643\u0627\u0645\u064A\u0631\u0627 \u062D\u0648\u0644 \u0627\u0644\u0645\u0648\u0642\u0639 (\u0645\u062F\u0627\u0631 3D \u062D\u0642\u064A\u0642\u064A\u060C \u0645\u0627 \u0634\u064A\u0621 CSS)
+      startBearingRotation();
+    document.getElementById('statusLabel').textContent = 'LOCKED 3D';
+    notifyStatusOnce('online');
+  });
+
+  map3d.on('error', function () {
+    if (mode !== 'fallback') activateFallback();
+  });
+}
+
+function makeLocDot() {
+  var el = document.createElement('div');
+  el.id = 'locDot';
+  return el;
+}
+
+function startBearingRotation() {
+  if (rotationTimer) return;
+  rotationTimer = setInterval(function () {
+    if (!map3d) return;
+    currentBearing = (currentBearing + 0.4) % 360;
+    map3d.setBearing(currentBearing);
+  }, 60);
 }
 
 function drawFallback(lat, lon) {
@@ -232,16 +275,13 @@ function setCoords(lat, lon) {
   lastLat = lat;
   lastLon = lon;
 
-  if (mode === 'leaflet') {
+  if (mode === '3d') {
     try {
-      if (!map) {
-        initLeafletMap(lat, lon);
+      if (!map3d) {
+        initMap3D(lat, lon);
       } else {
-        map.setView([lat, lon]);
-        if (marker) marker.setLatLng([lat, lon]);
+        map3d.setCenter([lon, lat]);
       }
-      document.getElementById('statusLabel').textContent = 'LOCKED';
-      notifyStatusOnce('online');
       return;
     } catch (e) {
       mode = null;
@@ -252,43 +292,31 @@ function setCoords(lat, lon) {
     activateFallback();
   } else {
     drawFallback(lat, lon);
-    document.getElementById('statusLabel').textContent = 'LOCKED (OFFLINE)';
-    notifyStatusOnce('offline');
   }
 }
 
-// \u0625\u0639\u0627\u062F\u0629 \u0631\u0633\u0645 \u0627\u0644\u0628\u062F\u064A\u0644 \u0644\u0645\u0627 \u064A\u062A\u063A\u064A\u0631 \u062D\u062C\u0645 \u0627\u0644\u0644\u0648\u062D\u0629 (\u0645\u062B\u0644\u0627\u064B \u0628\u0639\u062F \u0627\u0644\u062A\u0643\u0628\u064A\u0631)
-window.addEventListener('resize', function () {
-  if (mode === 'fallback' && lastLat !== null) {
-    drawFallback(lastLat, lastLon);
-  }
-  if (map) {
-    setTimeout(function () { map.invalidateSize(); }, 200);
-  }
-});
-
-var leafletScript = document.createElement('script');
-leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-leafletScript.onload = function () {
+var mlScript = document.createElement('script');
+mlScript.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+mlScript.onload = function () {
   if (mode === null) {
-    mode = 'leaflet';
+    mode = '3d';
     if (lastLat !== null) setCoords(lastLat, lastLon);
   }
 };
-leafletScript.onerror = function () {
+mlScript.onerror = function () {
   if (mode === null) activateFallback();
 };
-document.head.appendChild(leafletScript);
+document.head.appendChild(mlScript);
 
 setTimeout(function () {
   if (mode === null) activateFallback();
-}, 3000);
+}, 4000);
 
 // ---------------- \u0625\u064A\u0645\u0627\u0621\u0627\u062A \u0627\u0644\u0644\u0645\u0633: \u0636\u063A\u0637\u062A\u064A\u0646 = \u062A\u0643\u0628\u064A\u0631\u060C 3 \u0636\u063A\u0637\u0627\u062A = \u0634\u0627\u0634\u0629 \u0643\u0627\u0645\u0644\u0629 ----------------
 var tapCount = 0;
 var tapTimer = null;
 
-document.getElementById('panel').addEventListener('click', function () {
+document.getElementById('tapCatcher').addEventListener('click', function () {
   tapCount++;
   if (tapTimer) clearTimeout(tapTimer);
   tapTimer = setTimeout(function () {
