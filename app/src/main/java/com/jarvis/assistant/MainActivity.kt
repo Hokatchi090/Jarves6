@@ -2518,7 +2518,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         // \u0644\u0645\u062D\u0631\u0643\u0627\u062A TTS \u062D\u062F \u0623\u0642\u0635\u0649 \u0644\u0637\u0648\u0644 \u0627\u0644\u0646\u0635 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621 \u0627\u0644\u0648\u0627\u062D\u062F \u2014 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 (\u0645\u062B\u0644 \u0631\u062F\u0648\u062F Gemini) \u0643\u0627\u0646 \u064A\u062A\u0642\u0637\u0639 \u0628\u0635\u0645\u062A. \u0646\u0642\u0633\u0651\u0645\u0647 \u0644\u062C\u0645\u0644 \u0648\u0646\u0631\u0633\u0644\u0647\u0645 \u0648\u0627\u062D\u062F \u0628\u0648\u0627\u062D\u062F
         val maxLen = try {
-            tts.maxSpeechInputLength.takeIf { it > 0 } ?: 3800
+            TextToSpeech.getMaxSpeechInputLength().takeIf { it > 0 } ?: 3800
         } catch (e: Exception) {
             3800
         }
