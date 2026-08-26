@@ -1542,7 +1542,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun runSecurityScan() {
+    private fun runSecurityScan(statusView: TextView? = null) {
         respond("\u0646\u0641\u062D\u0635 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0648\u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A...")
         Thread {
             val riskyApps = securityScanner.scanInstalledApps()
@@ -1550,11 +1550,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             runOnUiThread {
                 if (riskyApps.isEmpty()) {
                     respond("\u0645\u0627\u0644\u0642\u064A\u062A \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0639\u0646\u062F\u0647\u0627 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u062D\u0633\u0627\u0633\u0629 \u0645\u0645\u064A\u0632\u0629")
+                    statusView?.text = "\u0645\u0627\u0641\u064A\u0634 \u062A\u0637\u0628\u064A\u0642\u0627\u062A \u062E\u0637\u064A\u0631\u0629"
                 } else {
                     val top = riskyApps.take(3).joinToString(". ") { app ->
                         "${app.appName}: " + app.riskyPermissions.joinToString("\u060C ")
                     }
                     respond("\u0644\u0642\u064A\u062A ${riskyApps.size} \u062A\u0637\u0628\u064A\u0642 \u0639\u0646\u062F\u0647\u0627 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u062D\u0633\u0627\u0633\u0629. \u0623\u0628\u0631\u0632\u0647\u0627: $top")
+                    statusView?.text = "${riskyApps.size} \u062A\u0637\u0628\u064A\u0642: $top"
                 }
                 if (devOptionsOn) {
                     log("\u062A\u0646\u0628\u064A\u0647: \u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0637\u0648\u0631\u064A\u0646/USB Debugging \u0645\u0641\u0639\u0651\u0644\u0629 \u0639\u0644\u0649 \u0627\u0644\u062C\u0647\u0627\u0632")
@@ -1563,15 +1565,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }.start()
     }
 
+    private fun runSecurityScanForPanel(statusView: TextView) = runSecurityScan(statusView)
+
     // ---------------- Bluetooth ----------------
 
-    private fun scanBluetoothDevices() {
+    private fun scanBluetoothDevices(statusView: TextView? = null) {
         if (!bluetoothHelper.isBluetoothAvailable()) {
             respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 Bluetooth")
+            statusView?.text = "\u0645\u0627\u0641\u064A\u0634 Bluetooth"
             return
         }
         if (!bluetoothHelper.isBluetoothEnabled()) {
             respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0634\u063A\u0644 Bluetooth \u0623\u0648\u0644")
+            statusView?.text = "Bluetooth \u0645\u0637\u0641\u0651\u0649"
             return
         }
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -1589,14 +1595,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 runOnUiThread {
                     if (devices.isEmpty()) {
                         respond("\u0645\u0627\u0644\u0642\u064A\u062A \u0623\u064A \u062C\u0647\u0627\u0632 \u0642\u0631\u064A\u0628")
+                        statusView?.text = "\u0645\u0627\u0644\u0642\u064A\u062A \u0623\u062C\u0647\u0632\u0629 \u0642\u0631\u064A\u0628\u0629"
                     } else {
                         val names = devices.take(5).joinToString("\u060C ") { it.name }
                         respond("\u0644\u0642\u064A\u062A ${devices.size} \u062C\u0647\u0627\u0632: $names")
+                        statusView?.text = "${devices.size} \u062C\u0647\u0627\u0632: $names"
                     }
                 }
             }
         )
     }
+
+    private fun scanBluetoothDevicesForPanel(statusView: TextView) = scanBluetoothDevices(statusView)
 
     // ---------------- Free cloud backup (Supabase) ----------------
 
@@ -1783,6 +1793,38 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         findViewById<TextView>(R.id.sysSettingsButton).setOnClickListener {
             openSystemSettings()
+        }
+
+        val sysStatus = findViewById<TextView>(R.id.sysStatusText)
+
+        findViewById<TextView>(R.id.sysBluetoothButton).setOnClickListener {
+            sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u0628\u062D\u062B \u0639\u0646 \u0623\u062C\u0647\u0632\u0629 Bluetooth..."
+            scanBluetoothDevicesForPanel(sysStatus)
+        }
+
+        findViewById<TextView>(R.id.sysDefenseButton).setOnClickListener {
+            toggleDefenseMode(!defenseModeActive)
+            sysStatus.text = if (defenseModeActive) "\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639: \u0645\u0641\u0639\u0651\u0644" else "\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639: \u0645\u0637\u0641\u0651\u0649"
+        }
+
+        findViewById<TextView>(R.id.sysScanButton).setOnClickListener {
+            sysStatus.text = "\u062C\u0627\u0631\u064A \u0641\u062D\u0635 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A..."
+            runSecurityScanForPanel(sysStatus)
+        }
+
+        findViewById<TextView>(R.id.sysIrButton).setOnClickListener {
+            sendIrCommand("power")
+            sysStatus.text = if (irRemote.hasIrBlaster()) "\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0625\u0634\u0627\u0631\u0629 IR" else "\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 \u0645\u0631\u0633\u0644 IR"
+        }
+
+        findViewById<TextView>(R.id.sysBackupButton).setOnClickListener {
+            sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u062D\u0641\u0638 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629..."
+            backupNotesToCloud()
+        }
+
+        findViewById<TextView>(R.id.sysRestoreButton).setOnClickListener {
+            sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629..."
+            restoreNotesFromCloud()
         }
 
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
