@@ -65,7 +65,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private lateinit var logText: TextView
     private lateinit var statusText: TextView
-    private var mediaPlayer: MediaPlayer? = null
+    private lateinit var mediaPlayer: MediaPlayer? = null
+    private lateinit var wpsModule: WPSAuditModule
+private lateinit var btnScanWifi: Button
+private lateinit var btnExploitWps: Button
+private lateinit var tvLogOutput: TextView
+private lateinit var tvMainStatus: TextView
     private var flashOn = false
     private var continuousMode = false
     private var speechRecognizer: SpeechRecognizer? = null
@@ -152,8 +157,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
-    private var userName: String = ""
-    private var userEmail: String = ""
+    private var userName: String = "youcef"
+    private var userEmail: String = "youcefakram4@gmail.com"
     private var userPhone: String = ""
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
@@ -173,7 +178,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // ---- \u0645\u0641\u062A\u0627\u062D Gemini: \u064A\u062C\u064A \u0645\u0646 BuildConfig (\u0645\u0635\u062F\u0631\u0647 local.properties \u0623\u0648 GitHub Secrets) ----
     // \u0644\u0627 \u062A\u062D\u0637 \u0627\u0644\u0645\u0641\u062A\u0627\u062D \u0647\u0646\u0627 \u0623\u0628\u062F\u0627\u064B. \u0634\u0648\u0641 \u0645\u0644\u0641 local.properties.example
-    private val GEMINI_API_KEY = BuildConfig.GEMINI_API_KEY
+    private val GEMINI_API_KEY = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
     private val geminiClient by lazy { GeminiClient(GEMINI_API_KEY) }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Google Maps: \u0646\u0641\u0633 \u0627\u0644\u0645\u0628\u062F\u0623\u060C \u064A\u062C\u064A \u0645\u0646 BuildConfig ----
