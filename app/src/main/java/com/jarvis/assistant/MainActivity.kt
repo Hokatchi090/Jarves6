@@ -88,6 +88,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var lastBrowserUrl = "https://www.google.com"
     private var lastQueuedUtteranceId: String? = null
 
+    // ---- \u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u0639 Gemini: \u0646\u062D\u062A\u0641\u0638 \u0628\u0622\u062E\u0631 \u062A\u0628\u0627\u062F\u0644 \u0623\u0633\u0626\u0644\u0629/\u0631\u062F\u0648\u062F \u0628\u0627\u0634 \u064A\u0641\u0647\u0645 \u0627\u0644\u0633\u064A\u0627\u0642 \u0648\u0645\u0627 \u064A\u0646\u0633\u0627\u0634\u064A \u0641\u064A \u0643\u0644 \u0631\u0633\u0627\u0644\u0629
+    // \u0643\u0644 \u0639\u0646\u0635\u0631 = "role" ("user" \u0623\u0648 "model") \u0645\u0639 \u0627\u0644\u0646\u0635
+    private val conversationHistory = mutableListOf<Pair<String, String>>()
+    private val maxHistoryTurns = 12 // \u064A\u0639\u0646\u064A 6 \u062A\u0628\u0627\u062F\u0644\u0627\u062A (\u0633\u0624\u0627\u0644 + \u062C\u0648\u0627\u0628) \u0628\u0627\u0634 \u0645\u0627 \u064A\u0643\u0628\u0631\u0634 \u0627\u0644\u0637\u0644\u0628
+
     // ---- \u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0623\u062F\u0627\u0621: \u064A\u0639\u062F FPS \u0627\u0644\u062D\u0642\u064A\u0642\u064A\u0629 \u0639\u0628\u0631 Choreographer \u0648\u064A\u0639\u0631\u0636 \u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0630\u0627\u0643\u0631\u0629. \u064A\u0634\u062A\u063A\u0644 \u0641\u0642\u0637 \u0641\u064A Debug builds
     private var frameCount = 0
     private var lastFpsTimestamp = 0L
@@ -169,6 +174,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // ---- \u0645\u0641\u062A\u0627\u062D Gemini: \u064A\u062C\u064A \u0645\u0646 BuildConfig (\u0645\u0635\u062F\u0631\u0647 local.properties \u0623\u0648 GitHub Secrets) ----
     // \u0644\u0627 \u062A\u062D\u0637 \u0627\u0644\u0645\u0641\u062A\u0627\u062D \u0647\u0646\u0627 \u0623\u0628\u062F\u0627\u064B. \u0634\u0648\u0641 \u0645\u0644\u0641 local.properties.example
     private val GEMINI_API_KEY = BuildConfig.GEMINI_API_KEY
+    private val geminiClient by lazy { GeminiClient(GEMINI_API_KEY) }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Google Maps: \u0646\u0641\u0633 \u0627\u0644\u0645\u0628\u062F\u0623\u060C \u064A\u062C\u064A \u0645\u0646 BuildConfig ----
     private val GOOGLE_MAPS_API_KEY = BuildConfig.GOOGLE_MAPS_API_KEY
@@ -268,20 +274,34 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // \u0645\u0644\u0627\u062D\u0638\u0629: JarvisDialView \u0627\u0644\u062C\u062F\u064A\u062F \u064A\u062D\u0631\u0643 \u0646\u0641\u0633\u0647 \u062F\u0627\u062E\u0644\u064A\u064B\u0627 \u0639\u0628\u0631 postInvalidateOnAnimation()\u060C \u0641\u0645\u0627 \u0639\u0627\u062F \u0641\u064A\u0647 \u062D\u0627\u062C\u0629 \u0644\u062F\u0648\u0627\u0644 \u062A\u062F\u0648\u064A\u0631 \u062E\u0627\u0631\u062C\u064A\u0629
 
+    // \u062A\u062E\u062A\u0627\u0631 \u0623\u0642\u0631\u0628 \u0635\u0648\u062A \u0631\u062C\u0627\u0644\u064A \u0645\u062A\u0648\u0641\u0631 \u0644\u0644\u063A\u0629 \u0645\u0639\u064A\u0646\u0629 \u0639\u0644\u0649 \u0645\u062D\u0631\u0643 TTS. \u064A\u0637\u0628\u0651\u0642 \u0628\u0639\u062F \u0643\u0644 \u062A\u063A\u064A\u064A\u0631 \u0644\u063A\u0629 \u0639\u0634\u0627\u0646 \u0627\u0644\u0635\u0648\u062A \u064A\u0628\u0642\u0649 \u0631\u062C\u0627\u0644\u064A \u0641\u064A \u0643\u0644 \u0627\u0644\u0644\u063A\u0627\u062A\u060C \u0645\u0627\u0634\u064A \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u0631\u0643 \u0641\u0642\u0637
+    private fun applyMaleVoiceForCurrentLanguage() {
+        val langVoices = tts.voices?.filter { it.locale.language == tts.language.language }
+        // \u0646\u0641\u0644\u062A\u0631 \u0623\u0648\u0644\u0627\u064B \u0639\u0644\u0649 \u0627\u0644\u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0644\u064A \u0641\u064A\u0647\u0627 \u0625\u0634\u0627\u0631\u0629 \u0648\u0627\u0636\u062D\u0629 \u0644\u0644\u0630\u0643\u0648\u0631\u0629\u060C \u0648\u0646\u0631\u062A\u0651\u0628\u0647\u0645 \u062D\u0633\u0628 \u0627\u0644\u062C\u0648\u062F\u0629 (\u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 = \u0635\u0648\u062A \u0623\u0637\u0628\u064A\u0639\u064A \u0623\u0643\u062B\u0631)
+        val maleCandidates = langVoices?.filter { voice ->
+            val n = voice.name.lowercase(Locale.ROOT)
+            (n.contains("male") && !n.contains("female")) ||
+                    n.contains("-d-") || n.contains("#male")
+        }?.sortedByDescending { it.quality }
+
+        val bestVoice = maleCandidates?.firstOrNull()
+            // \u0644\u0648 \u0645\u0627\u0644\u0642\u064A\u0646\u0627\u0634 \u0635\u0648\u062A \u0645\u0643\u062A\u0648\u0628 \u0639\u0644\u064A\u0647 "male" \u0635\u0631\u064A\u062D\u060C \u0646\u062E\u0644\u064A \u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 \u0645\u062A\u0648\u0641\u0631\u0629 \u0648\u0646\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u0637\u0628\u0642\u0629 \u0627\u0644\u0645\u0646\u062E\u0641\u0636\u0629 \u0628\u0627\u0634 \u062A\u0628\u0627\u0646 \u0623\u0642\u0631\u0628 \u0644\u0644\u0631\u062C\u0627\u0644\u064A
+            ?: langVoices?.sortedByDescending { it.quality }?.firstOrNull()
+
+        if (bestVoice != null) {
+            tts.voice = bestVoice
+        }
+        // \u0646\u062E\u0641\u0636 \u0627\u0644\u0637\u0628\u0642\u0629 \u0648\u0646\u0632\u064A\u062F \u0634\u0648\u064A \u0641\u064A \u0627\u0644\u0628\u0637\u0621 \u0628\u0627\u0634 \u0627\u0644\u0635\u0648\u062A \u064A\u0628\u0627\u0646 \u0623\u0647\u062F\u0627 \u0648\u0623\u0642\u0631\u0628 \u0644\u0637\u0627\u0628\u0639 "\u062C\u0627\u0631\u0641\u0633" \u0645\u0627\u0634\u064A \u0631\u0648\u0628\u0648\u062A\u064A
+        tts.setPitch(if (maleCandidates?.isNotEmpty() == true) 0.85f else 0.75f)
+        tts.setSpeechRate(0.92f)
+    }
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts.language = Locale.ENGLISH
             tts.setPitch(0.6f)
             tts.setSpeechRate(0.88f)
-            val englishVoices = tts.voices?.filter { it.locale.language == "en" }
-            val maleVoice = englishVoices?.firstOrNull { voice ->
-                val n = voice.name.lowercase(Locale.ROOT)
-                (n.contains("male") && !n.contains("female")) ||
-                        n.contains("-d-") || n.contains("#male")
-            }
-            if (maleVoice != null) {
-                tts.voice = maleVoice
-            }
+            applyMaleVoiceForCurrentLanguage()
 
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
@@ -494,7 +514,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun handleCommand(text: String) {
         try {
-            handleCommandInternal(text)
+            commandRouter.route(text)
         } catch (e: Exception) {
             log("\u062E\u0637\u0623 \u062F\u0627\u062E\u0644\u064A: ${e.message}")
             respond("\u0645\u0627 \u0641\u0647\u0645\u062A\u0634")
@@ -516,6 +536,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         usageTracker.recordCommand(cmd)
 
         when {
+            // \u0646\u0633\u064A\u0627\u0646 \u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u0639 Gemini \u0645\u0646 \u063A\u064A\u0631 \u0645\u0627 \u0646\u0639\u064A\u062F \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642
+            cmd.contains("\u0627\u0646\u0633\u0649 \u0643\u0644\u0627\u0645\u064A") || cmd.contains("\u0627\u0645\u0633\u062D \u0627\u0644\u0630\u0627\u0643\u0631\u0629") ||
+                    cmd.contains("forget everything") || cmd.contains("clear memory") -> {
+                conversationHistory.clear()
+                respond("\u0645\u0627\u0634\u064A \u0645\u0634\u0643\u0644\u0629\u060C \u0646\u0633\u064A\u062A \u0643\u0644 \u0634\u064A \u0645\u0646 \u0647\u0627\u062F \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629")
+            }
+            // \u0627\u062E\u062A\u0635\u0627\u0631 \u0644\u0648\u062D\u0629 \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A (Android 10+)\u060C \u0645\u0627\u0634\u064A \u062A\u0634\u063A\u064A\u0644/\u0625\u0637\u0641\u0627\u0621 \u0645\u0628\u0627\u0634\u0631 \u0644\u0623\u0646 \u0642\u0648\u0642\u0644 \u0645\u0627\u0646\u0639\u062A\u0647\u0627 \u0644\u0623\u0633\u0628\u0627\u0628 \u062E\u0635\u0648\u0635\u064A\u0629\u060C \u0628\u0633 \u0647\u0630\u0627 \u0623\u0633\u0631\u0639 \u0637\u0631\u064A\u0642\u0629 \u0645\u062A\u0627\u062D\u0629
+            cmd.contains("\u0627\u0641\u062A\u062D \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A") || cmd.contains("\u0627\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A") || cmd.contains("open wifi") -> {
+                try {
+                    startActivity(Intent(android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY))
+                    respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0641\u062A\u062D\u0644\u0643 \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0628\u0643\u0629")
+                } catch (e: Exception) {
+                    startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+                    respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0641\u062A\u062D\u0644\u0643 \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0648\u0627\u064A \u0641\u0627\u064A")
+                }
+            }
             cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") || cmd.contains("\u0627\u0628\u062F\u0627 \u0645\u062D\u0627\u0636\u0631\u0629") ||
                     cmd.contains("\u0633\u062C\u0644 \u0645\u062D\u0627\u0636\u0631\u0629") -> {
                 startLectureMode()
@@ -985,21 +1021,40 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    // ---- \u0634\u062E\u0635\u064A\u0629 \u062C\u0627\u0631\u0641\u0633: \u0647\u0630\u0627 \u0627\u0644\u0648\u0635\u0641 \u064A\u062A\u0628\u0639\u062A \u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0641\u064A \u0643\u0644 \u0645\u062D\u0627\u062F\u062B\u0629 \u0639\u0628\u0631 system_instruction \u0628\u062F\u0627\u0644 \u0645\u0627 \u064A\u062A\u0643\u0631\u0631 \u0641\u064A \u0643\u0644 \u0631\u0633\u0627\u0644\u0629
+    private fun buildJarvisPersona(): String {
+        val nameContext = if (userName.isNotBlank())
+            "The user's name is $userName. Address them by name occasionally, not every message. "
+        else ""
+        return "You are Jarvis, a highly capable personal AI assistant built into the user's phone. " +
+                "Personality: calm, sharp, and quietly confident \u2014 like a brilliant, loyal aide who has seen everything and is never rattled. " +
+                "You are warm toward the user specifically, subtly witty and dry rather than goofy, and you don't grovel or over-apologize. " +
+                "You take initiative: if you notice something useful to add, add it briefly, but you never ramble. " +
+                "You speak like a real person having a conversation, not like a corporate chatbot \u2014 no 'As an AI' disclaimers, no bullet-point overload unless the user actually needs a list. " +
+                "You remember the conversation so far and refer back to it naturally when relevant. " +
+                "$nameContext" +
+                "Language rule: always reply in the same language the user's current message is written in (if it mixes languages, reply in English; default to English only if truly ambiguous). " +
+                "Keep answers concise \u2014 a few sentences unless the user is asking for something detailed or technical, in which case give it properly."
+    }
+
     private fun askGemini(message: String) {
-        val nameContext = if (userName.isNotBlank()) "My name is ${userName}, address me by name occasionally. " else ""
-        val identityContext = "You are Jarvis, a personal assistant with one consistent personality across all languages. "
-        val languageRule = "Language rule: respond in the same language the user's message is written in. If the message mixes English with another language, reply in English. If it's a single language, clean, with no mixing, reply in that same language. When there is no clear signal, default to English. "
-        val styleRule = "Keep your answers short, clear, and simple, in a natural conversational tone, without being overly formal or robotic. "
-        val promptWithStyle = "$identityContext$languageRule$styleRule$nameContext$message"
+        val contents = JSONArray()
+        for ((role, text) in conversationHistory) {
+            contents.put(JSONObject().apply {
+                put("role", role)
+                put("parts", JSONArray().put(JSONObject().apply { put("text", text) }))
+            })
+        }
+        contents.put(JSONObject().apply {
+            put("role", "user")
+            put("parts", JSONArray().put(JSONObject().apply { put("text", message) }))
+        })
 
         val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().apply {
-                    put("parts", JSONArray().put(
-                        JSONObject().apply { put("text", promptWithStyle) }
-                    ))
-                }
-            ))
+            put("system_instruction", JSONObject().apply {
+                put("parts", JSONArray().put(JSONObject().apply { put("text", buildJarvisPersona()) }))
+            })
+            put("contents", contents)
         }
 
         val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
@@ -1031,7 +1086,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         .getJSONArray("parts")
                         .getJSONObject(0)
                         .getString("text")
-                    runOnUiThread { respond(reply.trim()) }
+                    val cleanReply = reply.trim()
+
+                    // \u0646\u062D\u0641\u0638 \u0627\u0644\u062A\u0628\u0627\u062F\u0644 \u0641\u064A \u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0648\u0646\u0642\u0635 \u0627\u0644\u0642\u062F\u064A\u0645 \u0625\u0630\u0627 \u0637\u0648\u0644\u062A \u0628\u0627\u0634 \u0645\u0627 \u062A\u0643\u0628\u0631\u0634 \u0627\u0644\u0637\u0644\u0628\u0627\u062A
+                    conversationHistory.add("user" to message)
+                    conversationHistory.add("model" to cleanReply)
+                    while (conversationHistory.size > maxHistoryTurns) {
+                        conversationHistory.removeAt(0)
+                    }
+
+                    runOnUiThread { respond(cleanReply) }
                 } catch (e: Exception) {
                     log("\u062E\u0637\u0623 Gemini: ${e.message}")
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u0647\u0645 \u0631\u062F Gemini") }
@@ -1315,32 +1379,38 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             cmd.contains("\u0639\u0631\u0628\u064A") || cmd.contains("arabic") || cmd.contains("arabe") -> {
                 currentLangCode = "ar"
                 tts.language = Locale("ar")
+                applyMaleVoiceForCurrentLanguage()
                 respond("\u062A\u0645\u0627\u0645\u060C \u0631\u062D \u0623\u0633\u0645\u0639\u0643 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0647\u0644\u0642\u060C \u0623\u0646\u0627 \u0644\u0633\u0627 \u062C\u0627\u0631\u0641\u0633")
             }
             cmd.contains("\u0641\u0631\u0646\u0633") || cmd.contains("french") || cmd.contains("fran\u00E7ais") -> {
                 currentLangCode = "fr"
                 tts.language = Locale.FRENCH
+                applyMaleVoiceForCurrentLanguage()
                 respond("D'accord, je t'\u00E9coute en fran\u00E7ais maintenant, je suis toujours Jarvis")
             }
             cmd.contains("\u0627\u0646\u062C\u0644\u064A\u0632") || cmd.contains("english") || cmd.contains("anglais") -> {
                 currentLangCode = "en"
                 tts.language = Locale.ENGLISH
+                applyMaleVoiceForCurrentLanguage()
                 respond("Okay, I'm listening in English now, still Jarvis")
             }
             cmd.contains("\u0627\u0633\u0628\u0627\u0646") || cmd.contains("spanish") || cmd.contains("espa\u00F1ol") -> {
                 currentLangCode = "es"
                 tts.language = Locale("es")
+                applyMaleVoiceForCurrentLanguage()
                 respond("Vale, ahora te escucho en espa\u00F1ol, sigo siendo Jarvis")
             }
             cmd.contains("\u0631\u0648\u0633") || cmd.contains("russian") || cmd.contains("\u0440\u0443\u0441\u0441\u043A") -> {
                 currentLangCode = "ru"
                 tts.language = Locale("ru")
+                applyMaleVoiceForCurrentLanguage()
                 respond("\u0425\u043E\u0440\u043E\u0448\u043E, \u0442\u0435\u043F\u0435\u0440\u044C \u044F \u0441\u043B\u0443\u0448\u0430\u044E \u043F\u043E-\u0440\u0443\u0441\u0441\u043A\u0438, \u044F \u0432\u0441\u0451 \u0442\u043E\u0442 \u0436\u0435 \u0414\u0436\u0430\u0440\u0432\u0438\u0441")
             }
             cmd.contains("\u0645\u0627\u0646\u062F\u0631\u064A\u0646") || cmd.contains("\u0635\u064A\u0646\u064A") || cmd.contains("mandarin") ||
                     cmd.contains("chinese") || cmd.contains("\u4E2D\u6587") -> {
                 currentLangCode = "zh"
                 tts.language = Locale.SIMPLIFIED_CHINESE
+                applyMaleVoiceForCurrentLanguage()
                 respond("\u597D\u7684\uFF0C\u73B0\u5728\u6211\u542C\u4E2D\u6587\u4E86\uFF0C\u6211\u8FD8\u662F\u8D3E\u7EF4\u65AF")
             }
             else -> {
@@ -1506,10 +1576,77 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // \u062E\u0631\u064A\u0637\u0629 \u0627\u0633\u0645 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 -> \u0627\u0633\u0645 \u0627\u0644\u062D\u0632\u0645\u0629\u060C \u062A\u062A\u0645\u0644\u0627 \u0645\u0644\u064A \u0646\u0641\u062A\u062D\u0648 \u0642\u0627\u0626\u0645\u0629 APPS
     private val appNameToPackage = mutableMapOf<String, String>()
 
+    private val jarvisModuleManager by lazy { JarvisModuleManager() }
+
+    private val commandRouter by lazy {
+        JarvisCommandRouter(
+            legacyHandler = { text -> handleCommandInternal(text) },
+            appLauncher = { spokenName -> tryLaunchAppByName(spokenName) },
+            systemHandler = { intent -> JarvisSystemModule(this) { msg -> respond(msg) }.execute(intent) },
+            appsHandler = { intent ->
+                when (intent.type) {
+                    JarvisIntentType.APPS_SHOW -> { showAppsModule(); true }
+                    JarvisIntentType.APPS_HIDE -> { jarvisDial.setAppsModule(false); true }
+                    else -> false
+                }
+            },
+            clockHandler = { intent ->
+                when (intent.type) {
+                    JarvisIntentType.CLOCK_SHOW -> { jarvisDial.setClockVisible(true); respond("\u0638\u0647\u0631\u062A \u0627\u0644\u0633\u0627\u0639\u0629"); true }
+                    JarvisIntentType.CLOCK_HIDE -> { jarvisDial.setClockVisible(false); respond("\u062E\u0641\u064A\u062A \u0627\u0644\u0633\u0627\u0639\u0629"); true }
+                    else -> false
+                }
+            },
+            mapHandler = { intent -> JarvisMapModule(this) { msg -> respond(msg) }.execute(intent) },
+            contactsHandler = { intent ->
+                JarvisContactsModule(
+                    activity = this,
+                    speak = { msg -> respond(msg) },
+                    askAi = { prompt -> askGemini(prompt) },
+                    requestPermission = { permission, code ->
+                        ActivityCompat.requestPermissions(this, arrayOf(permission), code)
+                    },
+                    reqPermissionsCode = REQ_PERMISSIONS,
+                    reqContactsCode = REQ_CONTACTS
+                ).execute(intent)
+            },
+            moduleManager = jarvisModuleManager,
+            onModuleToggled = { module, enabled ->
+                when (module.type) {
+                    JarvisModuleType.CLOCK -> jarvisDial.setClockVisible(enabled)
+                    JarvisModuleType.APPS -> if (!enabled) jarvisDial.setAppsModule(false)
+                    else -> { /* SYSTEM/MAP: \u0645\u062C\u0631\u062F \u062D\u0627\u0644\u0629 \u0645\u0633\u062C\u0644\u0629 \u062D\u0627\u0644\u064A\u0627\u064B\u060C \u0645\u062A\u0627\u062D\u0629 \u0644\u0644\u062A\u0648\u0633\u0639 \u0644\u0627\u062D\u0642\u0627\u064B */ }
+                }
+                respond(
+                    if (enabled) "\u0641\u0639\u0651\u0644\u062A \u0648\u062D\u062F\u0629 ${module.title}"
+                    else "\u0639\u0637\u0651\u0644\u062A \u0648\u062D\u062F\u0629 ${module.title}"
+                )
+            }
+        )
+    }
+
+    // \u064A\u062F\u0648\u0631 \u0639\u0644\u0649 \u062A\u0637\u0628\u064A\u0642 \u0645\u062B\u0628\u062A \u0628\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u0637\u0648\u0642 (\u0645\u0637\u0627\u0628\u0642\u0629 \u062C\u0632\u0626\u064A\u0629) \u0648\u064A\u0641\u062A\u062D\u0647 \u0625\u0630\u0627 \u0644\u0642\u0627\u0647\u060C \u064A\u0631\u062C\u0639 true/false \u0644\u0644\u0645\u0648\u062C\u0651\u0647
+    private fun tryLaunchAppByName(spokenName: String): Boolean {
+        if (spokenName.isBlank()) return false
+        return try {
+            val pm = packageManager
+            val match = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
+                .firstOrNull { pm.getApplicationLabel(it).toString().contains(spokenName, ignoreCase = true) }
+                ?: return false
+            val label = pm.getApplicationLabel(match).toString()
+            openApp(match.packageName, label)
+            true
+        } catch (e: Exception) {
+            log("\u062E\u0637\u0623 \u0641\u062A\u062D \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0628\u0627\u0644\u0627\u0633\u0645: ${e.message}")
+            false
+        }
+    }
+
     // ---------------- IR remote control ----------------
 
     private fun sendIrCommand(action: String) {
-        if (!irRemote.hasIrBlaster()) {
+if (!irRemote.hasIrBlaster()) {
             respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 \u0645\u0631\u0633\u0644 \u0623\u0634\u0639\u0629 \u062A\u062D\u062A \u0627\u0644\u062D\u0645\u0631\u0627\u0621")
             return
         }
@@ -1990,63 +2127,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun fetchAiSuggestions() {
         val suggestionsView = findViewById<TextView>(R.id.aiSuggestionsText)
         val refreshButton = findViewById<TextView>(R.id.aiRefreshButton)
-        if (GEMINI_API_KEY.isBlank()) {
+        if (!geminiClient.isConfigured()) {
             suggestionsView.text = "\u0645\u0627\u0641\u064A\u0634 \u0645\u0641\u062A\u0627\u062D Gemini \u0645\u0636\u0628\u0648\u0637"
             return
         }
         refreshButton.text = "...\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F"
 
         val prompt = "Give exactly 3 short, practical productivity or app-usage tips, each one line, no numbering, no markdown."
-        val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().apply {
-                    put("parts", JSONArray().put(
-                        JSONObject().apply { put("text", prompt) }
-                    ))
+        geminiClient.generateSimple(
+            prompt = prompt,
+            onSuccess = { text ->
+                runOnUiThread {
+                    refreshButton.text = "TAP TO GENERATE"
+                    suggestionsView.text = text
                 }
-            ))
-        }
-        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("x-goog-api-key", GEMINI_API_KEY)
-            .post(body)
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
+            },
+            onError = { error ->
+                log("\u062E\u0637\u0623 \u062A\u062D\u0644\u064A\u0644 \u0631\u062F AI: $error")
                 runOnUiThread {
                     refreshButton.text = "TAP TO GENERATE"
                     suggestionsView.text = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A"
                 }
             }
-
-            override fun onResponse(call: Call, response: Response) {
-                val text = try {
-                    val responseText = response.body?.string() ?: ""
-                    val json = JSONObject(responseText)
-                    if (json.has("error")) {
-                        "\u062E\u0637\u0623 \u0645\u0646 Gemini: " + json.getJSONObject("error").optString("message", "")
-                    } else {
-                        json.getJSONArray("candidates")
-                            .getJSONObject(0)
-                            .getJSONObject("content")
-                            .getJSONArray("parts")
-                            .getJSONObject(0)
-                            .getString("text")
-                    }
-                } catch (e: Exception) {
-                    log("\u062E\u0637\u0623 \u062A\u062D\u0644\u064A\u0644 \u0631\u062F AI: ${e.message}")
-                    "\u062A\u0639\u0630\u0631 \u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0631\u062F"
-                }
-                runOnUiThread {
-                    refreshButton.text = "TAP TO GENERATE"
-                    suggestionsView.text = text
-                }
-            }
-        })
+        )
     }
 
     private fun setupModuleMenu() {
