@@ -9,6 +9,16 @@ enum class JarvisIntentType {
     SYSTEM_SETTINGS,
     APPS_SHOW,
     APPS_HIDE,
+    CLOCK_SHOW,
+    CLOCK_HIDE,
+    MODULE_ENABLE,
+    MODULE_DISABLE,
+    MAP_NAVIGATE,
+    MAP_DISTANCE,
+    CONTACT_CALL,
+    SMS_READ,
+    SMS_EXPLAIN,
+    SMS_SEND,
     UNKNOWN
 }
 
