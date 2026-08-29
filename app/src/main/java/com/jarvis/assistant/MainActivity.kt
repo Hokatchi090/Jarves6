@@ -65,12 +65,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private lateinit var logText: TextView
     private lateinit var statusText: TextView
-    private lateinit var mediaPlayer: MediaPlayer? = null
-    private lateinit var wpsModule: WPSAuditModule
-private lateinit var btnScanWifi: Button
-private lateinit var btnExploitWps: Button
-private lateinit var tvLogOutput: TextView
-private lateinit var tvMainStatus: TextView
+    private var mediaPlayer: MediaPlayer? = null
     private var flashOn = false
     private var continuousMode = false
     private var speechRecognizer: SpeechRecognizer? = null
@@ -90,6 +85,8 @@ private lateinit var tvMainStatus: TextView
     private var miniBrowserEnlarged = false
     private var lastKnownLat = 0.0
     private var lastKnownLon = 0.0
+    private val fieldNotebook by lazy { FieldNotebookManager(this) }
+    private val geoCompass by lazy { GeoCompassHelper(this) }
     private var lastBrowserUrl = "https://www.google.com"
     private var lastQueuedUtteranceId: String? = null
 
@@ -157,9 +154,9 @@ private lateinit var tvMainStatus: TextView
     }
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
-    private var userName: String = "youcef"
+    private var userName: String = "Youcef"
     private var userEmail: String = "youcefakram4@gmail.com"
-    private var userPhone: String = ""
+    private var userPhone: String = "0775540495"
     private var lectureMode = false
     private var lectureBuffer = StringBuilder()
     private val client = OkHttpClient()
@@ -1615,6 +1612,14 @@ private lateinit var tvMainStatus: TextView
                     reqContactsCode = REQ_CONTACTS
                 ).execute(intent)
             },
+            geologyHandler = { intent ->
+                JarvisGeologyModule(
+                    notebook = fieldNotebook,
+                    compass = geoCompass,
+                    speak = { msg -> respond(msg) },
+                    getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
+                ).execute(intent)
+            },
             moduleManager = jarvisModuleManager,
             onModuleToggled = { module, enabled ->
                 when (module.type) {
@@ -1638,7 +1643,7 @@ private lateinit var tvMainStatus: TextView
             val match = pm.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
                 .firstOrNull { pm.getApplicationLabel(it).toString().contains(spokenName, ignoreCase = true) }
-                ?: return false
+          ?: return false
             val label = pm.getApplicationLabel(match).toString()
             openApp(match.packageName, label)
             true
@@ -1651,7 +1656,7 @@ private lateinit var tvMainStatus: TextView
     // ---------------- IR remote control ----------------
 
     private fun sendIrCommand(action: String) {
-if (!irRemote.hasIrBlaster()) {
+        if (!irRemote.hasIrBlaster()) {
             respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 \u0645\u0631\u0633\u0644 \u0623\u0634\u0639\u0629 \u062A\u062D\u062A \u0627\u0644\u062D\u0645\u0631\u0627\u0621")
             return
         }
@@ -2741,6 +2746,7 @@ if (!irRemote.hasIrBlaster()) {
         }
         stopPerfMonitor()
         nfcHelper.disableForegroundDispatch()
+        geoCompass.stop()
         if (::jarvisDial.isInitialized) {
             jarvisDial.pauseAnimation()
         }
@@ -2761,6 +2767,7 @@ if (!irRemote.hasIrBlaster()) {
         }
         startPerfMonitor()
         nfcHelper.enableForegroundDispatch()
+        geoCompass.start()
         // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
         if (continuousMode) {
             startListening()
