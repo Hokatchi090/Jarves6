@@ -154,7 +154,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
     private var pulseAnimator: ObjectAnimator? = null
     private lateinit var jarvisDial: JarvisDialView
-    private var userName: String = "Youcef"
+    private var userName: String = "youcef"
     private var userEmail: String = "youcefakram4@gmail.com"
     private var userPhone: String = "0775540495"
     private var lectureMode = false
@@ -1620,6 +1620,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
                 ).execute(intent)
             },
+            safetyHandler = { intent ->
+                JarvisSafetyModule(
+                    activity = this,
+                    speak = { msg -> respond(msg) },
+                    askAi = { prompt -> askGemini(prompt) },
+                    getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
+                ).execute(intent)
+            },
+            startListeningHandler = {
+                if (!continuousMode) enableContinuousMode() else startListening()
+            },
             moduleManager = jarvisModuleManager,
             onModuleToggled = { module, enabled ->
                 when (module.type) {
@@ -1643,7 +1654,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val match = pm.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
                 .firstOrNull { pm.getApplicationLabel(it).toString().contains(spokenName, ignoreCase = true) }
-          ?: return false
+                ?: return false
             val label = pm.getApplicationLabel(match).toString()
             openApp(match.packageName, label)
             true
@@ -1913,6 +1924,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             params.marginStart = marginPx
             contentArea.layoutParams = params
         }
+
+        // ---- \u0627\u0644\u0633\u0627\u0639\u0629 \u0627\u0644\u0639\u0644\u0648\u064A\u0629: \u062A\u062A\u062D\u062F\u062B \u0643\u0644 30 \u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0644 \u0645\u0627 \u062A\u0628\u0642\u0649 \u0648\u0627\u0642\u0641\u0629 \u0639\u0644\u0649 00:00 ----
+        val timeFormat = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
+        clockRunnable = object : Runnable {
+            override fun run() {
+                topClock.text = timeFormat.format(java.util.Date())
+                clockHandler.postDelayed(this, 30_000L)
+            }
+        }
+        clockHandler.post(clockRunnable)
 
         // ---- \u0627\u0644\u0633\u0627\u0639\u0629 \u0627\u0644\u0639\u0644\u0648\u064A\u0629: \u062A\u062A\u062D\u062F\u062B \u0643\u0644 30 \u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0644 \u0645\u0627 \u062A\u0628\u0642\u0649 \u0648\u0627\u0642\u0641\u0629 \u0639\u0644\u0649 00:00 ----
         val timeFormat = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -2728,6 +2749,33 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (tagContent != null) {
             respond("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0628\u0637\u0627\u0642\u0629: $tagContent")
         }
+    }
+
+    // \u0632\u0631 \u0627\u0644\u0623\u0631\u0628\u0648\u062F\u0632/\u0627\u0644\u0633\u0645\u0627\u0639\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629: 3 \u0636\u063A\u0637\u0627\u062A \u0633\u0631\u064A\u0639\u0629 \u062E\u0644\u0627\u0644 \u062B\u0627\u0646\u064A\u0629 \u0648\u0627\u062D\u062F\u0629 \u062A\u0628\u062F\u0623 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639
+    private var headsetPressCount = 0
+    private var lastHeadsetPressTime = 0L
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_HEADSETHOOK ||
+            keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        ) {
+            val now = System.currentTimeMillis()
+            if (now - lastHeadsetPressTime > 1200L) {
+                headsetPressCount = 0
+            }
+            headsetPressCount++
+            lastHeadsetPressTime = now
+            if (headsetPressCount >= 3) {
+                headsetPressCount = 0
+                if (!continuousMode) {
+                    enableContinuousMode()
+                } else {
+                    startListening()
+                }
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onPause() {
