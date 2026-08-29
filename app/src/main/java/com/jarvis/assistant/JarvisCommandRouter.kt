@@ -11,6 +11,8 @@ class JarvisCommandRouter(
     private val mapHandler: ((JarvisIntent) -> Boolean)? = null,
     private val contactsHandler: ((JarvisIntent) -> Boolean)? = null,
     private val geologyHandler: ((JarvisIntent) -> Boolean)? = null,
+    private val safetyHandler: ((JarvisIntent) -> Boolean)? = null,
+    private val startListeningHandler: (() -> Unit)? = null,
     private val moduleManager: JarvisModuleManager? = null,
     private val onModuleToggled: ((JarvisModule, Boolean) -> Unit)? = null
 ) {
@@ -90,6 +92,22 @@ class JarvisCommandRouter(
                 if (!handled) {
                     legacyHandler(text)
                 }
+            }
+
+            JarvisIntentType.SAFETY_FAKE_CALL,
+            JarvisIntentType.SAFETY_SEND_LOCATION,
+            JarvisIntentType.SAFETY_RECORD_START,
+            JarvisIntentType.SAFETY_RECORD_STOP,
+            JarvisIntentType.SAFETY_DEFENSE_INFO,
+            JarvisIntentType.SAFETY_SET_CONTACT -> {
+                val handled = safetyHandler?.invoke(intent) ?: false
+                if (!handled) {
+                    legacyHandler(text)
+                }
+            }
+
+            JarvisIntentType.START_LISTENING -> {
+                startListeningHandler?.invoke() ?: legacyHandler(text)
             }
 
             JarvisIntentType.UNKNOWN -> {
@@ -228,6 +246,27 @@ class JarvisCommandRouter(
 
             text.contains("\u0627\u0644\u0628\u0648\u0635\u0644\u0629") || text.contains("\u0627\u062A\u062C\u0627\u0647 \u0627\u0644\u0637\u0628\u0642\u0629") || text.contains("strike") ->
                 JarvisIntent(JarvisIntentType.COMPASS_READ, originalText = text)
+
+            (text.contains("\u062C\u0627\u0631\u0641\u0633") && text.contains("\u0627\u0628\u062F\u0623") && text.contains("\u0627\u0633\u062A\u0645\u0627\u0639")) ->
+                JarvisIntent(JarvisIntentType.START_LISTENING, originalText = text)
+
+            text.contains("\u0627\u062A\u0635\u0627\u0644 \u0645\u0632\u064A\u0641") ->
+                JarvisIntent(JarvisIntentType.SAFETY_FAKE_CALL, originalText = text)
+
+            text.contains("\u0627\u0628\u0639\u062B \u0645\u0648\u0642\u0639\u064A") || (text.contains("\u0645\u0648\u0642\u0639\u064A") && text.contains("\u0637\u0648\u0627\u0631\u0626")) ->
+                JarvisIntent(JarvisIntentType.SAFETY_SEND_LOCATION, originalText = text)
+
+            text.contains("\u0627\u062D\u0641\u0638 \u0631\u0642\u0645 \u0627\u0644\u0637\u0648\u0627\u0631\u0626") ->
+                JarvisIntent(JarvisIntentType.SAFETY_SET_CONTACT, argument = text.substringAfter("\u0627\u0644\u0637\u0648\u0627\u0631\u0626").trim(), originalText = text)
+
+            text.contains("\u0628\u062F\u0627 \u0627\u0644\u062A\u0633\u062C\u064A\u0644") || text.contains("\u0633\u062C\u0644 \u0643\u062F\u0644\u064A\u0644") ->
+                JarvisIntent(JarvisIntentType.SAFETY_RECORD_START, originalText = text)
+
+            text.contains("\u0648\u0642\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644") ->
+                JarvisIntent(JarvisIntentType.SAFETY_RECORD_STOP, originalText = text)
+
+            text.contains("\u062F\u0641\u0627\u0639 \u0639\u0646 \u0627\u0644\u0646\u0641\u0633") || text.contains("\u0645\u0627 \u0639\u0646\u062F\u064A \u0623\u0645\u0627\u0646") ->
+                JarvisIntent(JarvisIntentType.SAFETY_DEFENSE_INFO, originalText = text)
 
             else -> JarvisIntent(JarvisIntentType.UNKNOWN, originalText = text)
         }
