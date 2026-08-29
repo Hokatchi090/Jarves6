@@ -10,6 +10,7 @@ class JarvisCommandRouter(
     private val clockHandler: ((JarvisIntent) -> Boolean)? = null,
     private val mapHandler: ((JarvisIntent) -> Boolean)? = null,
     private val contactsHandler: ((JarvisIntent) -> Boolean)? = null,
+    private val geologyHandler: ((JarvisIntent) -> Boolean)? = null,
     private val moduleManager: JarvisModuleManager? = null,
     private val onModuleToggled: ((JarvisModule, Boolean) -> Unit)? = null
 ) {
@@ -76,6 +77,16 @@ class JarvisCommandRouter(
             JarvisIntentType.SMS_EXPLAIN,
             JarvisIntentType.SMS_SEND -> {
                 val handled = contactsHandler?.invoke(intent) ?: false
+                if (!handled) {
+                    legacyHandler(text)
+                }
+            }
+
+            JarvisIntentType.FIELD_LOG_ADD,
+            JarvisIntentType.FIELD_LOG_LIST,
+            JarvisIntentType.FIELD_LOG_EXPORT,
+            JarvisIntentType.COMPASS_READ -> {
+                val handled = geologyHandler?.invoke(intent) ?: false
                 if (!handled) {
                     legacyHandler(text)
                 }
@@ -203,6 +214,20 @@ class JarvisCommandRouter(
                     JarvisIntent(JarvisIntentType.SMS_SEND, argument = "", originalText = text)
                 }
             }
+
+            text.contains("\u0633\u062C\u0651\u0644 \u0645\u0644\u0627\u062D\u0638\u0629 \u0645\u064A\u062F\u0627\u0646\u064A\u0629") || text.contains("\u0623\u0636\u0641 \u0644\u0644\u062F\u0641\u062A\u0631 \u0627\u0644\u0645\u064A\u062F\u0627\u0646\u064A") -> {
+                val marker = if (text.contains("\u0633\u062C\u0651\u0644 \u0645\u0644\u0627\u062D\u0638\u0629 \u0645\u064A\u062F\u0627\u0646\u064A\u0629")) "\u0633\u062C\u0651\u0644 \u0645\u0644\u0627\u062D\u0638\u0629 \u0645\u064A\u062F\u0627\u0646\u064A\u0629" else "\u0623\u0636\u0641 \u0644\u0644\u062F\u0641\u062A\u0631 \u0627\u0644\u0645\u064A\u062F\u0627\u0646\u064A"
+                JarvisIntent(JarvisIntentType.FIELD_LOG_ADD, argument = text.substringAfter(marker).trim(), originalText = text)
+            }
+
+            text.contains("\u0627\u0644\u062F\u0641\u062A\u0631 \u0627\u0644\u0645\u064A\u062F\u0627\u0646\u064A") && (text.contains("\u0648\u0631\u064A\u0646\u064A") || text.contains("\u0627\u0642\u0631\u0627")) ->
+                JarvisIntent(JarvisIntentType.FIELD_LOG_LIST, originalText = text)
+
+            text.contains("\u0635\u062F\u0651\u0631") && text.contains("\u0627\u0644\u062F\u0641\u062A\u0631 \u0627\u0644\u0645\u064A\u062F\u0627\u0646\u064A") ->
+                JarvisIntent(JarvisIntentType.FIELD_LOG_EXPORT, originalText = text)
+
+            text.contains("\u0627\u0644\u0628\u0648\u0635\u0644\u0629") || text.contains("\u0627\u062A\u062C\u0627\u0647 \u0627\u0644\u0637\u0628\u0642\u0629") || text.contains("strike") ->
+                JarvisIntent(JarvisIntentType.COMPASS_READ, originalText = text)
 
             else -> JarvisIntent(JarvisIntentType.UNKNOWN, originalText = text)
         }
