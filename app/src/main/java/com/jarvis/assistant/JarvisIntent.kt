@@ -19,6 +19,10 @@ enum class JarvisIntentType {
     SMS_READ,
     SMS_EXPLAIN,
     SMS_SEND,
+    FIELD_LOG_ADD,
+    FIELD_LOG_LIST,
+    FIELD_LOG_EXPORT,
+    COMPASS_READ,
     UNKNOWN
 }
 
