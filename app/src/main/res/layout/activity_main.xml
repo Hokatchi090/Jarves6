@@ -138,6 +138,18 @@
             android:fontFamily="monospace"
             android:clickable="true"
             android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navMore"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center"
+            android:text="MORE"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
     </LinearLayout>
 
     <!-- Content area (to the right of sidebar, below top bar) -->
@@ -568,6 +580,179 @@
                     android:lineSpacingExtra="8dp" />
             </ScrollView>
         </LinearLayout>
+
+        <!-- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) -->
+        <ScrollView
+            android:id="@+id/morePanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:id="@+id/moreFakeCallButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:text="FAKE CALL"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/moreSendLocationButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SEND SOS LOCATION"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:id="@+id/moreRecordStartButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="REC START"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="#142A30"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreRecordStopButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="REC STOP"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="#142A30"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreDefenseInfoButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SELF-DEFENSE INFO"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="\u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="10dp">
+
+                    <TextView
+                        android:id="@+id/moreFieldListButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="FIELD LOG"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="#142A30"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreFieldExportButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="EXPORT CSV"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="#142A30"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreCompassButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="COMPASS"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="#142A30"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text=""
+                    android:textColor="#5C7A82"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+        </ScrollView>
 
     </FrameLayout>
 
