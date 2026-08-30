@@ -1962,16 +1962,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         clockHandler.post(clockRunnable)
 
-        // ---- \u0627\u0644\u0633\u0627\u0639\u0629 \u0627\u0644\u0639\u0644\u0648\u064A\u0629: \u062A\u062A\u062D\u062F\u062B \u0643\u0644 30 \u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0644 \u0645\u0627 \u062A\u0628\u0642\u0649 \u0648\u0627\u0642\u0641\u0629 \u0639\u0644\u0649 00:00 ----
-        val timeFormat = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
-        clockRunnable = object : Runnable {
-            override fun run() {
-                topClock.text = timeFormat.format(java.util.Date())
-                clockHandler.postDelayed(this, 30_000L)
-            }
-        }
-        clockHandler.post(clockRunnable)
-
         // ---- SYS panel: \u0623\u0632\u0631\u0627\u0631 \u062D\u0642\u064A\u0642\u064A\u0629 ----
         val flashButton = findViewById<TextView>(R.id.sysFlashToggle)
         flashButton.setOnClickListener {
