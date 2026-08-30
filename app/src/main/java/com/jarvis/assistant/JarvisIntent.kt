@@ -19,16 +19,28 @@ enum class JarvisIntentType {
     SMS_READ,
     SMS_EXPLAIN,
     SMS_SEND,
+
+    // ── دفتر الميدان ──────────────────────────────────
     FIELD_LOG_ADD,
     FIELD_LOG_LIST,
     FIELD_LOG_EXPORT,
+    FIELD_PHOTO_ADD,     // ← جديد: التقط صورة وارفقها بآخر ملاحظة
+
+    // ── بوصلة الطبقات ─────────────────────────────────
     COMPASS_READ,
+
+    // ── قاعدة الصخور والمعادن (أوفلاين) ──────────────
+    ROCK_INFO,           // ← جديد: عرّف [اسم صخر/معدن]
+    ROCK_SEARCH,         // ← جديد: صخر [وصف الخصائص]
+
+    // ── الأمان ────────────────────────────────────────
     SAFETY_FAKE_CALL,
     SAFETY_SEND_LOCATION,
     SAFETY_RECORD_START,
     SAFETY_RECORD_STOP,
     SAFETY_DEFENSE_INFO,
     SAFETY_SET_CONTACT,
+
     START_LISTENING,
     UNKNOWN
 }
