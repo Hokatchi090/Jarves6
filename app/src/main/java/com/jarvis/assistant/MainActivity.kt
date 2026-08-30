@@ -32,6 +32,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Choreographer
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.speech.tts.TextToSpeech
@@ -87,6 +88,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var lastKnownLon = 0.0
     private val fieldNotebook by lazy { FieldNotebookManager(this) }
     private val geoCompass by lazy { GeoCompassHelper(this) }
+    private val jarvisGeologyModule by lazy {
+        JarvisGeologyModule(
+            notebook = fieldNotebook,
+            compass = geoCompass,
+            speak = { msg -> respond(msg) },
+            getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
+        )
+    }
+    private val jarvisSafetyModule by lazy {
+        JarvisSafetyModule(
+            activity = this,
+            speak = { msg -> respond(msg) },
+            askAi = { prompt -> askGemini(prompt) },
+            getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
+        )
+    }
     private var lastBrowserUrl = "https://www.google.com"
     private var lastQueuedUtteranceId: String? = null
 
@@ -214,8 +231,30 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         speechRecognizer?.setRecognitionListener(recognitionListener)
 
-        findViewById<View>(R.id.micButton).setOnClickListener {
-            toggleContinuousMode()
+        // \u0627\u0636\u063A\u0637 \u0648\u062b\u0628\u0651\u062a \u0644\u0644\u062d\u062f\u064a\u062b (\u0632\u064a \u062c\u0647\u0627\u0632 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064a): \u0627\u0636\u063a\u0637 \u0639\u0644\u0649 \u0645\u0646\u062a\u0635\u0641 \u062c\u0627\u0631\u0641\u0633 \u064a\u0628\u062f\u0623 \u064a\u0633\u0645\u0639\u060c \u0627\u0631\u0641\u0639 \u0625\u0635\u0628\u0639\u0643 \u064a\u062a\u0648\u0642\u0641 \u0648\u064a\u0641\u0647\u0645 \u0627\u0644\u0623\u0645\u0631
+        var pressToTalkActive = false
+        findViewById<View>(R.id.micButton).setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (!continuousMode && !pressToTalkActive) {
+                        pressToTalkActive = true
+                        statusText.text = "\u062c\u0627\u0631\u064a \u0627\u0644\u0627\u0633\u062a\u0645\u0627\u0639..."
+                        findViewById<TextView>(R.id.micIcon).text = "\u23fa\ufe0f"
+                        startListening()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (pressToTalkActive) {
+                        pressToTalkActive = false
+                        speechRecognizer?.stopListening()
+                        findViewById<TextView>(R.id.micIcon).text = "\ud83c\udf99\ufe0f"
+                        statusText.text = "\u062c\u0627\u0647\u0632 \u0644\u0644\u0627\u0633\u062a\u0645\u0627\u0639"
+                    }
+                    true
+                }
+                else -> false
+            }
         }
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -1612,22 +1651,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     reqContactsCode = REQ_CONTACTS
                 ).execute(intent)
             },
-            geologyHandler = { intent ->
-                JarvisGeologyModule(
-                    notebook = fieldNotebook,
-                    compass = geoCompass,
-                    speak = { msg -> respond(msg) },
-                    getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
-                ).execute(intent)
-            },
-            safetyHandler = { intent ->
-                JarvisSafetyModule(
-                    activity = this,
-                    speak = { msg -> respond(msg) },
-                    askAi = { prompt -> askGemini(prompt) },
-                    getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
-                ).execute(intent)
-            },
+            geologyHandler = { intent -> jarvisGeologyModule.execute(intent) },
+            safetyHandler = { intent -> jarvisSafetyModule.execute(intent) },
             startListeningHandler = {
                 if (!continuousMode) enableContinuousMode() else startListening()
             },
@@ -1886,7 +1911,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             "LAB" to findViewById<TextView>(R.id.navLab),
             "SYS" to findViewById<TextView>(R.id.navSys),
             "NET" to findViewById<TextView>(R.id.navNet),
-            "AI" to findViewById<TextView>(R.id.navAi)
+            "AI" to findViewById<TextView>(R.id.navAi),
+            "MORE" to findViewById<TextView>(R.id.navMore)
         )
         val panels = mapOf(
             "HOME" to findViewById<View>(R.id.homePanel),
@@ -1894,7 +1920,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             "LAB" to findViewById<View>(R.id.labPanel),
             "SYS" to findViewById<View>(R.id.sysPanel),
             "NET" to findViewById<View>(R.id.netPanel),
-            "AI" to findViewById<View>(R.id.aiPanel)
+            "AI" to findViewById<View>(R.id.aiPanel),
+            "MORE" to findViewById<View>(R.id.morePanel)
         )
 
         fun switchPanel(key: String) {
@@ -1993,6 +2020,38 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.sysRestoreButton).setOnClickListener {
             sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629..."
             restoreNotesFromCloud()
+        }
+
+        // ---- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) ----
+        val moreStatus = findViewById<TextView>(R.id.moreStatusText)
+
+        findViewById<TextView>(R.id.moreFakeCallButton).setOnClickListener {
+            jarvisSafetyModule.execute(JarvisIntent(JarvisIntentType.SAFETY_FAKE_CALL))
+        }
+        findViewById<TextView>(R.id.moreSendLocationButton).setOnClickListener {
+            moreStatus.text = "\u062C\u0627\u0631\u064A \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0648\u0642\u0639..."
+            jarvisSafetyModule.execute(JarvisIntent(JarvisIntentType.SAFETY_SEND_LOCATION))
+        }
+        findViewById<TextView>(R.id.moreRecordStartButton).setOnClickListener {
+            moreStatus.text = "\u0627\u0644\u062A\u0633\u062C\u064A\u0644 \u0634\u063A\u0627\u0644"
+            jarvisSafetyModule.execute(JarvisIntent(JarvisIntentType.SAFETY_RECORD_START))
+        }
+        findViewById<TextView>(R.id.moreRecordStopButton).setOnClickListener {
+            moreStatus.text = "\u062A\u0645 \u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u062A\u0633\u062C\u064A\u0644"
+            jarvisSafetyModule.execute(JarvisIntent(JarvisIntentType.SAFETY_RECORD_STOP))
+        }
+        findViewById<TextView>(R.id.moreDefenseInfoButton).setOnClickListener {
+            jarvisSafetyModule.execute(JarvisIntent(JarvisIntentType.SAFETY_DEFENSE_INFO))
+        }
+        findViewById<TextView>(R.id.moreFieldListButton).setOnClickListener {
+            jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.FIELD_LOG_LIST))
+        }
+        findViewById<TextView>(R.id.moreFieldExportButton).setOnClickListener {
+            moreStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0635\u062F\u064A\u0631..."
+            jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.FIELD_LOG_EXPORT))
+        }
+        findViewById<TextView>(R.id.moreCompassButton).setOnClickListener {
+            jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
 
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
