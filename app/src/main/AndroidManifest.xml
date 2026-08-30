@@ -1,31 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- ── حساسات وموقع ────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- ── تسجيل صوتي ─────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- ── جهات الاتصال والرسائل ──────────────────────────────── -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />       <!-- جديد: مطلوب لـ SOS -->
+
+    <!-- ── الكاميرا والفلاش ───────────────────────────────────── -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- ── نظام وإشعارات ──────────────────────────────────────── -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.VIBRATE" />        <!-- جديد: مطلوب للاهتزاز -->
+
+    <!-- ── بلوتوث ─────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ── NFC ───────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.NFC" />
-    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
-    <uses-feature android:name="android.hardware.nfc" android:required="false" />
-<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-<uses-feature android:name="android.hardware.wifi" android:required="true" />
-    
+
+    <!-- ── Wi-Fi (للمقالب فقط – هاتفك أنت) ─────────────────── -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- ── مشرف الجهاز (لزر قفل الطوارئ) ───────────────────── -->
+    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
+
+    <!-- ── مميزات الهاردوير (غير إلزامية) ──────────────────── -->
+    <uses-feature android:name="android.hardware.camera.flash"   android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps"   android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le"   android:required="false" />
+    <uses-feature android:name="android.hardware.nfc"            android:required="false" />
+    <uses-feature android:name="android.hardware.wifi"           android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.compass"       android:required="false" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -37,8 +59,8 @@
         android:allowBackup="true"
         android:label="Jarvis"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
-<activity android:name=".DesignLabActivity" android:exported="false" />
-  
+
+        <!-- ── نشاطات ─────────────────────────────────────────── -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -48,6 +70,26 @@
             </intent-filter>
         </activity>
 
+        <!-- FakeCallActivity: كانت في الكود لكن لم تُسجَّل — مُصلَح -->
+        <activity
+            android:name=".FakeCallActivity"
+            android:exported="false"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true" />
+
+        <activity
+            android:name=".DesignLabActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MapFullscreenActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".BrowserFullscreenActivity"
+            android:exported="false" />
+
+        <!-- ── مستقبلات ───────────────────────────────────────── -->
         <receiver
             android:name=".ReminderReceiver"
             android:exported="false" />
@@ -57,6 +99,19 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- مشرف الجهاز: مطلوب لزر "قفل الجهاز فوراً" في SecurityGuardModule -->
+        <receiver
+            android:name=".MyDeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
 
