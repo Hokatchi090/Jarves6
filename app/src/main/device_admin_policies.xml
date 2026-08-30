@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- المسار: app/src/main/res/xml/device_admin_policies.xml -->
+<!-- مطلوب لتفعيل زر قفل الجهاز الفوري (Panic Lockdown) -->
+<device-admin>
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>
