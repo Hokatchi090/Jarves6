@@ -94,8 +94,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             compass = geoCompass,
             speak = { msg -> respond(msg) },
             getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
-        )
-    }
+       activity = this   // ← أضف هذا السطر
+    )
+}
+
+// 2. أضف في onActivityResult
+if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
+    jarvisGeologyModule.onPhotoCaptured()
+}     
+    
+    
     private val jarvisSafetyModule by lazy {
         JarvisSafetyModule(
             activity = this,
