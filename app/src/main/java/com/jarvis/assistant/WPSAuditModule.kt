@@ -92,6 +92,36 @@ class WPSAuditModule(
         logHandler.post(runnable)
     }
 
+    // ─── مقلب ١: قطع Wi-Fi هاتفك مؤقتاً ثم إعادة الاتصال ──────────
+    // يؤثر على هاتفك أنت فقط — الهدف: مقلب بصري ممتع
+    fun executeDeauthJammer() {
+        val info = wifiManager.connectionInfo
+        if (info.networkId == -1) {
+            tvStatus.text = "⚠️ لست متصلاً بأي شبكة!"
+            return
+        }
+        val ssid  = info.ssid
+        val netId = info.networkId
+        tvStatus.text = "🌊 قطع Wi-Fi مؤقت لـ $ssid ... (5 ثوانٍ)"
+        logHandler.postDelayed({
+            wifiManager.enableNetwork(netId, true)
+            wifiManager.reconnect()
+            tvStatus.text = "🔁 إعادة الاتصال بـ $ssid"
+        }, 5000)
+        wifiManager.disableNetwork(netId)
+    }
+
+    // ─── مقلب ٢: إطفاء راديو Wi-Fi وإعادة تشغيله ───────────────
+    // يؤثر على هاتفك أنت فقط
+    fun executeRadioToggle() {
+        tvStatus.text = "📻 إطفاء راديو الواي فاي..."
+        wifiManager.isWifiEnabled = false
+        logHandler.postDelayed({
+            wifiManager.isWifiEnabled = true
+            tvStatus.text = "📡 راديو Wi-Fi عاد للعمل."
+        }, 2500)
+    }
+
     private fun hasPermissions(): Boolean {
         return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
