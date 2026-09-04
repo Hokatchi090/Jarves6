@@ -41,6 +41,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import net.objecthunter.exp4j.ExpressionBuilder
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -66,6 +67,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private lateinit var logText: TextView
     private lateinit var statusText: TextView
+    private lateinit var hudStatusDot: View
+    private lateinit var hudStatusLabel: TextView
+    private lateinit var hudLogTicker: TextView
+    private lateinit var hudLogScroll: android.widget.ScrollView
     private var mediaPlayer: MediaPlayer? = null
     private var flashOn = false
     private var continuousMode = false
@@ -93,11 +98,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             notebook = fieldNotebook,
             compass = geoCompass,
             speak = { msg -> respond(msg) },
-            getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) },
-            activity = this
-        )
-    }
+            getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
+       activity = this   // ← أضف هذا السطر
+    )
+}
 
+// 2. أضف في onActivityResult
+if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
+    jarvisGeologyModule.onPhotoCaptured()
+}     
+    
     
     private val jarvisSafetyModule by lazy {
         JarvisSafetyModule(
@@ -217,6 +227,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         statusText = findViewById(R.id.statusText)
         logText = findViewById(R.id.logText)
+        setupHudStatusPanel()
         tts = TextToSpeech(this, this)
 
         userName = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
@@ -286,6 +297,47 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (startImmediately) startListening()
     }
 
+    // ---------------- HUD status panel (\u0644\u0648\u062D\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 + \u0627\u0644\u0633\u062C\u0644 \u0627\u0644\u062D\u064A) ----------------
+
+    private fun setupHudStatusPanel() {
+        hudStatusDot = findViewById(R.id.hudStatusDot)
+        hudStatusLabel = findViewById(R.id.hudStatusLabel)
+        hudLogTicker = findViewById(R.id.hudLogTicker)
+        hudLogScroll = findViewById(R.id.hudLogScroll)
+
+        updateHudStatusPanel(JarvisHudState.READY)
+
+        jarvisDial.setHudStateListener { state ->
+            runOnUiThread { updateHudStatusPanel(state) }
+        }
+
+        // \u0645\u0631\u0622\u0629 \u0627\u0644\u0633\u062C\u0644 \u0627\u0644\u062F\u0627\u062E\u0644\u064A (logText \u0627\u0644\u062E\u0641\u064A) \u0625\u0644\u0649 \u0644\u0648\u062D\u0629 \u062D\u064A\u0629 \u0638\u0627\u0647\u0631\u0629\u060C \u0628\u062F\u0648\u0646 \u0627\u0644\u062D\u0627\u062C\u0629 \u0644\u062A\u0639\u062F\u064A\u0644 \u0623\u064A \u0645\u0643\u0627\u0646 \u0622\u062E\u0631 \u064A\u0646\u0627\u062F\u064A log()
+        logText.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val full = s?.toString() ?: return
+                hudLogTicker.text = full.takeLast(400)
+                hudLogScroll.post { hudLogScroll.fullScroll(View.FOCUS_DOWN) }
+            }
+        })
+    }
+
+    private fun updateHudStatusPanel(state: JarvisHudState) {
+        if (!::hudStatusLabel.isInitialized) return
+        val (colorHex, label) = when (state) {
+            JarvisHudState.READY -> "#41E0F4" to "ALL SYSTEMS NOMINAL"
+            JarvisHudState.LISTENING -> "#3CE696" to "LISTENING..."
+            JarvisHudState.THINKING -> "#FFB43C" to "PROCESSING..."
+            JarvisHudState.SPEAKING -> "#50E1FF" to "RESPONDING..."
+            JarvisHudState.ERROR -> "#FF5050" to "SYSTEM ERROR"
+        }
+        hudStatusLabel.text = label
+        hudStatusLabel.setTextColor(android.graphics.Color.parseColor(colorHex))
+        hudStatusDot.backgroundTintList =
+            android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor(colorHex))
+    }
+
     private fun disableContinuousMode() {
         continuousMode = false
         val container = findViewById<View>(R.id.micButton)
@@ -319,39 +371,80 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // \u0645\u0644\u0627\u062D\u0638\u0629: JarvisDialView \u0627\u0644\u062C\u062F\u064A\u062F \u064A\u062D\u0631\u0643 \u0646\u0641\u0633\u0647 \u062F\u0627\u062E\u0644\u064A\u064B\u0627 \u0639\u0628\u0631 postInvalidateOnAnimation()\u060C \u0641\u0645\u0627 \u0639\u0627\u062F \u0641\u064A\u0647 \u062D\u0627\u062C\u0629 \u0644\u062F\u0648\u0627\u0644 \u062A\u062F\u0648\u064A\u0631 \u062E\u0627\u0631\u062C\u064A\u0629
 
     // \u062A\u062E\u062A\u0627\u0631 \u0623\u0642\u0631\u0628 \u0635\u0648\u062A \u0631\u062C\u0627\u0644\u064A \u0645\u062A\u0648\u0641\u0631 \u0644\u0644\u063A\u0629 \u0645\u0639\u064A\u0646\u0629 \u0639\u0644\u0649 \u0645\u062D\u0631\u0643 TTS. \u064A\u0637\u0628\u0651\u0642 \u0628\u0639\u062F \u0643\u0644 \u062A\u063A\u064A\u064A\u0631 \u0644\u063A\u0629 \u0639\u0634\u0627\u0646 \u0627\u0644\u0635\u0648\u062A \u064A\u0628\u0642\u0649 \u0631\u062C\u0627\u0644\u064A \u0641\u064A \u0643\u0644 \u0627\u0644\u0644\u063A\u0627\u062A\u060C \u0645\u0627\u0634\u064A \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u0631\u0643 \u0641\u0642\u0637
+    // \u062D\u0627\u0644\u0629 \u062C\u0646\u0633 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u062D\u0627\u0644\u064A\u0629: false = \u0631\u062C\u0627\u0644\u064A (\u0627\u0641\u062A\u0631\u0627\u0636\u064A)\u060C true = \u0623\u0646\u062B\u0648\u064A. \u062A\u064F\u062D\u0641\u0638 \u0628\u064A\u0646 \u062C\u0644\u0633\u0627\u062A \u0627\u0644\u062A\u0634\u063A\u064A\u0644
+    private var isFemaleVoice: Boolean = false
+
     private fun applyMaleVoiceForCurrentLanguage() {
         val langVoices = tts.voices?.filter { it.locale.language == tts.language.language }
-        // \u0646\u0641\u0644\u062A\u0631 \u0623\u0648\u0644\u0627\u064B \u0639\u0644\u0649 \u0627\u0644\u0623\u0633\u0645\u0627\u0621 \u0627\u0644\u0644\u064A \u0641\u064A\u0647\u0627 \u0625\u0634\u0627\u0631\u0629 \u0648\u0627\u0636\u062D\u0629 \u0644\u0644\u0630\u0643\u0648\u0631\u0629\u060C \u0648\u0646\u0631\u062A\u0651\u0628\u0647\u0645 \u062D\u0633\u0628 \u0627\u0644\u062C\u0648\u062F\u0629 (\u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 = \u0635\u0648\u062A \u0623\u0637\u0628\u064A\u0639\u064A \u0623\u0643\u062B\u0631)
-        val maleCandidates = langVoices?.filter { voice ->
+        // \u0646\u0641\u0644\u062A\u0631 \u062D\u0633\u0628 \u0627\u0644\u062C\u0646\u0633 \u0627\u0644\u0645\u062E\u062A\u0627\u0631 \u062D\u0627\u0644\u064A\u0627\u064B (isFemaleVoice)\u060C \u0648\u0646\u0631\u062A\u0651\u0628\u0647\u0645 \u062D\u0633\u0628 \u0627\u0644\u062C\u0648\u062F\u0629 (\u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 = \u0635\u0648\u062A \u0623\u0637\u0628\u064A\u0639\u064A \u0623\u0643\u062B\u0631)
+        val genderCandidates = langVoices?.filter { voice ->
             val n = voice.name.lowercase(Locale.ROOT)
-            (n.contains("male") && !n.contains("female")) ||
-                    n.contains("-d-") || n.contains("#male")
+            if (isFemaleVoice) {
+                n.contains("female") || n.contains("-a-") || n.contains("#female")
+            } else {
+                (n.contains("male") && !n.contains("female")) ||
+                        n.contains("-d-") || n.contains("#male")
+            }
         }?.sortedByDescending { it.quality }
 
-        val bestVoice = maleCandidates?.firstOrNull()
-            // \u0644\u0648 \u0645\u0627\u0644\u0642\u064A\u0646\u0627\u0634 \u0635\u0648\u062A \u0645\u0643\u062A\u0648\u0628 \u0639\u0644\u064A\u0647 "male" \u0635\u0631\u064A\u062D\u060C \u0646\u062E\u0644\u064A \u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 \u0645\u062A\u0648\u0641\u0631\u0629 \u0648\u0646\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u0637\u0628\u0642\u0629 \u0627\u0644\u0645\u0646\u062E\u0641\u0636\u0629 \u0628\u0627\u0634 \u062A\u0628\u0627\u0646 \u0623\u0642\u0631\u0628 \u0644\u0644\u0631\u062C\u0627\u0644\u064A
+        val bestVoice = genderCandidates?.firstOrNull()
+            // \u0644\u0648 \u0645\u0627\u0644\u0642\u064A\u0646\u0627\u0634 \u0635\u0648\u062A \u0645\u0643\u062A\u0648\u0628 \u0639\u0644\u064A\u0647 \u0627\u0644\u062C\u0646\u0633 \u0635\u0631\u064A\u062D\u060C \u0646\u062E\u0644\u064A \u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 \u0645\u062A\u0648\u0641\u0631\u0629 \u0648\u0646\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u0637\u0628\u0642\u0629 \u0627\u0644\u0645\u0646\u062E\u0641\u0636\u0629 (pitch) \u0628\u0627\u0634 \u062A\u0628\u0627\u0646 \u0623\u0642\u0631\u0628 \u0644\u0644\u062C\u0646\u0633 \u0627\u0644\u0645\u0637\u0644\u0648\u0628
             ?: langVoices?.sortedByDescending { it.quality }?.firstOrNull()
 
         if (bestVoice != null) {
             tts.voice = bestVoice
         }
-        // \u0646\u062E\u0641\u0636 \u0627\u0644\u0637\u0628\u0642\u0629 \u0648\u0646\u0632\u064A\u062F \u0634\u0648\u064A \u0641\u064A \u0627\u0644\u0628\u0637\u0621 \u0628\u0627\u0634 \u0627\u0644\u0635\u0648\u062A \u064A\u0628\u0627\u0646 \u0623\u0647\u062F\u0627 \u0648\u0623\u0642\u0631\u0628 \u0644\u0637\u0627\u0628\u0639 "\u062C\u0627\u0631\u0641\u0633" \u0645\u0627\u0634\u064A \u0631\u0648\u0628\u0648\u062A\u064A
-        tts.setPitch(if (maleCandidates?.isNotEmpty() == true) 0.85f else 0.75f)
+        // \u0646\u062E\u0641\u0636/\u0646\u0631\u0641\u0639 \u0627\u0644\u0637\u0628\u0642\u0629 \u062D\u0633\u0628 \u0627\u0644\u062C\u0646\u0633: \u0627\u0644\u0623\u0646\u062B\u0648\u064A \u0623\u0639\u0644\u0649 \u0642\u0644\u064A\u0644\u0627\u064B\u060C \u0627\u0644\u0631\u062C\u0627\u0644\u064A \u0623\u062E\u0641\u0636 \u0648\u0623\u0642\u0631\u0628 \u0644\u0637\u0627\u0628\u0639 "\u062C\u0627\u0631\u0641\u0633"
+        val foundGenderVoice = genderCandidates?.isNotEmpty() == true
+        tts.setPitch(
+            when {
+                isFemaleVoice && foundGenderVoice -> 1.15f
+                isFemaleVoice -> 1.25f
+                foundGenderVoice -> 0.85f
+                else -> 0.75f
+            }
+        )
         tts.setSpeechRate(0.92f)
+    }
+
+    /** \u064A\u0628\u062F\u0651\u0644 \u0628\u064A\u0646 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u0631\u062C\u0627\u0644\u064A \u0648\u0627\u0644\u0623\u0646\u062B\u0648\u064A \u0641\u0648\u0631\u064A\u0627\u064B\u060C \u064A\u062D\u0641\u0638 \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631\u060C \u0648\u064A\u0623\u0643\u0651\u062F \u0628\u062C\u0645\u0644\u0629 \u0645\u0646\u0637\u0648\u0642\u0629 */
+    private fun toggleVoiceGender() {
+        isFemaleVoice = !isFemaleVoice
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+            .putBoolean("is_female_voice", isFemaleVoice)
+            .apply()
+        applyMaleVoiceForCurrentLanguage()
+
+        findViewById<TextView>(R.id.sysVoiceGenderButton)?.text =
+            if (isFemaleVoice) "VOICE: FEMALE" else "VOICE: MALE"
+
+        val confirmation = when (currentLangCode) {
+            "ar" -> if (isFemaleVoice) "\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u0623\u0646\u062B\u0648\u064A" else "\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u0631\u062C\u0627\u0644\u064A"
+            "fr" -> if (isFemaleVoice) "Voix f\u00E9minine activ\u00E9e" else "Voix masculine activ\u00E9e"
+            "es" -> if (isFemaleVoice) "Voz femenina activada" else "Voz masculina activada"
+            "ru" -> if (isFemaleVoice) "\u0416\u0435\u043D\u0441\u043A\u0438\u0439 \u0433\u043E\u043B\u043E\u0441 \u0432\u043A\u043B\u044E\u0447\u0451\u043D" else "\u041C\u0443\u0436\u0441\u043A\u043E\u0439 \u0433\u043E\u043B\u043E\u0441 \u0432\u043A\u043B\u044E\u0447\u0451\u043D"
+            "zh" -> if (isFemaleVoice) "\u5DF2\u5207\u6362\u4E3A\u5973\u58F0" else "\u5DF2\u5207\u6362\u4E3A\u7537\u58F0"
+            else -> if (isFemaleVoice) "Female voice activated" else "Male voice activated"
+        }
+        respond(confirmation)
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
+            isFemaleVoice = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+                .getBoolean("is_female_voice", false)
             tts.language = Locale.ENGLISH
             tts.setPitch(0.6f)
             tts.setSpeechRate(0.88f)
             applyMaleVoiceForCurrentLanguage()
+            findViewById<TextView>(R.id.sysVoiceGenderButton)?.text =
+                if (isFemaleVoice) "VOICE: FEMALE" else "VOICE: MALE"
 
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
                     runOnUiThread {
                         if (::jarvisDial.isInitialized) {
-                            jarvisDial.setSpeaking(true)
+                            jarvisDial.setHudState(JarvisHudState.SPEAKING)
                         }
                     }
                 }
@@ -359,7 +452,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     runOnUiThread {
                         if (utteranceId != null && utteranceId != lastQueuedUtteranceId) return@runOnUiThread
                         if (::jarvisDial.isInitialized) {
-                            jarvisDial.setSpeaking(false)
+                            jarvisDial.setHudState(JarvisHudState.READY)
                         }
                         if (continuousMode && !lectureMode) startListening()
                     }
@@ -368,7 +461,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 override fun onError(utteranceId: String?) {
                     runOnUiThread {
                         if (::jarvisDial.isInitialized) {
-                            jarvisDial.setSpeaking(false)
+                            jarvisDial.setHudState(JarvisHudState.READY)
                         }
                         if (continuousMode && !lectureMode) startListening()
                     }
@@ -471,7 +564,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private val recognitionListener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onReadyForSpeech(params: Bundle?) {
+            if (::jarvisDial.isInitialized) {
+                jarvisDial.setHudState(JarvisHudState.LISTENING)
+            }
+        }
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {
             val level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
@@ -486,7 +583,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         override fun onError(error: Int) {
             // \u0625\u0639\u0627\u062F\u0629 \u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062D\u062F\u0648\u062F\u0629 (3 \u0645\u0631\u0627\u062A \u0623\u0642\u0635\u0649) \u0645\u0639 \u062A\u0623\u062E\u064A\u0631 \u062A\u0635\u0627\u0639\u062F\u064A \u0628\u062F\u0644 \u0645\u062D\u0627\u0648\u0644\u0629 \u0641\u0648\u0631\u064A\u0629 \u0642\u062F \u062A\u0647\u0631\u0633 \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629
-            if (!continuousMode) return
+            if (!continuousMode) {
+                if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.READY)
+                return
+            }
 
             listenRetryCount++
             if (listenRetryCount > maxListenRetries) {
@@ -496,7 +596,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 findViewById<TextView>(R.id.micIcon).text = "\uD83C\uDF99\uFE0F"
                 stopPulseAnimation(container)
                 statusText.text = "\u062C\u0627\u0647\u0632 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639"
+                if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.ERROR)
                 log("\u062A\u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 \u0628\u0639\u062F $maxListenRetries \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0641\u0627\u0634\u0644\u0629 (\u0631\u0645\u0632 \u0627\u0644\u062E\u0637\u0623: $error)")
+                retryHandler.postDelayed({
+                    if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.READY)
+                }, 2200L)
                 return
             }
 
@@ -508,6 +612,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         override fun onResults(resultsBundle: Bundle?) {
             listenRetryCount = 0
+            if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.THINKING)
             val matches = resultsBundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val spoken = matches?.firstOrNull()?.trim() ?: ""
             handleSpeechResult(spoken)
@@ -540,6 +645,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 else -> -1
             }
             if (wakeIndex != -1) {
+                jarvisDial.triggerWakeBurst()
                 val commandOnly = spoken.substring(wakeIndex.coerceAtMost(spoken.length)).trim()
                 if (commandOnly.isNotBlank()) {
                     handleCommand(commandOnly)
@@ -1570,7 +1676,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     private fun respondNavigation(place: String, mode: String) {
         if (mode == "walking") {
             respond("\u0647\u0627\u0643 \u0637\u0631\u064A\u0642 \u0627\u0644\u0645\u0634\u064A \u0627\u0644\u0649 $place")
@@ -1578,30 +1683,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u062C\u0627\u0631\u064A \u0641\u062A\u062D \u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u0649 $place")
         }
     }
-
     // ---------------- Jokes ----------------
-
     private val jokes = listOf(
         "\u0648\u0627\u062D\u062F \u0633\u0623\u0644 \u0635\u0627\u062D\u0628\u0648: \u0639\u0644\u0627\u0634 \u0627\u0644\u062F\u064A\u0643 \u064A\u0635\u064A\u062D \u0627\u0644\u0635\u0628\u0627\u062D\u061F \u0642\u0627\u0644\u0647: \u0628\u0627\u0634 \u064A\u0641\u0648\u0642\u0643 \u0642\u0628\u0644 \u0645\u0627 \u062A\u0641\u0648\u062A\u0647 \u0628\u0627\u0644\u0646\u0648\u0645.",
         "\u0637\u0641\u0644 \u0633\u0623\u0644 \u0628\u0627\u0628\u0627\u0647: \u0628\u0627\u0628\u0627 \u0648\u064A\u0646 \u062A\u062D\u0628 \u062A\u0643\u0648\u0646 \u0644\u0645\u0627 \u062A\u0643\u0628\u0631\u061F \u0642\u0627\u0644\u0647: \u0647\u0627\u062F\u064A \u0647\u064A \u0627\u0644\u0645\u0634\u0643\u0644\u0629\u060C \u0623\u0646\u0627 \u0643\u0628\u0631\u062A \u0648\u0645\u0627 \u0632\u0644\u062A \u0645\u0627 \u0639\u0631\u0641\u062A\u0634.",
         "\u0648\u0627\u062D\u062F \u062F\u062E\u0644 \u064A\u0634\u062A\u0631\u064A \u0633\u0627\u0639\u0629\u060C \u0642\u0627\u0644\u0647 \u0627\u0644\u0628\u064A\u0627\u0639: \u0647\u0627\u064A \u0627\u0644\u0633\u0627\u0639\u0629 \u0628\u062A\u0639\u064A\u0634 \u0645\u0639\u0627\u0643 \u0644\u0644\u0623\u0628\u062F. \u0642\u0627\u0644\u0647: \u0637\u064A\u0628 \u0623\u0639\u0637\u064A\u0646\u064A \u0648\u062D\u062F\u0629 \u062A\u0639\u064A\u0634 \u0623\u0633\u0628\u0648\u0639 \u0628\u0633\u060C \u062E\u0627\u064A\u0641 \u0646\u0636\u064A\u0639\u0647\u0627.",
         "\u0639\u0644\u0627\u0634 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0627 \u0628\u064A\u062D\u0633 \u0628\u0627\u0644\u0628\u0631\u062F\u061F \u0644\u0623\u0646\u0647 \u0639\u0646\u062F\u0647 Windows \u0645\u0633\u0643\u0631\u0629 \u0632\u064A\u0646."
     )
-
     // ---------------- Notes ----------------
-
     private fun saveNote(note: String) {
         notesManager.save(note)
     }
-
     private fun readNotes(): String {
         val notes = notesManager.getAll()
         if (notes.isEmpty()) return "\u0645\u0627 \u0639\u0646\u062F\u0643 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629"
         return "\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643: " + notes.joinToString("\u060C ")
     }
-
     // ---------------- Natural response variety ----------------
-
     private val flashOnPhrases = listOf(
         "\u062F\u0627\u064A\u0631\u0644\u0643 \u0627\u0644\u0641\u0644\u0627\u0634", "\u062A\u0645\u0627\u0645\u060C \u0648\u0644\u0651\u0649 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644", "\u0647\u0627\u0643 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644"
     )
@@ -1614,14 +1712,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val musicOffPhrases = listOf(
         "\u0648\u0642\u0641\u062A \u0627\u0644\u0645\u0648\u0633\u064A\u0642\u0649", "\u062A\u0645\u0627\u0645\u060C \u0633\u0643\u062A\u0647\u0627"
     )
-
     // ---------------- Radial module menu (APPS/SYS/MAP/3D/CLK) ----------------
-
     // \u062E\u0631\u064A\u0637\u0629 \u0627\u0633\u0645 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 -> \u0627\u0633\u0645 \u0627\u0644\u062D\u0632\u0645\u0629\u060C \u062A\u062A\u0645\u0644\u0627 \u0645\u0644\u064A \u0646\u0641\u062A\u062D\u0648 \u0642\u0627\u0626\u0645\u0629 APPS
     private val appNameToPackage = mutableMapOf<String, String>()
-
     private val jarvisModuleManager by lazy { JarvisModuleManager() }
-
     private val commandRouter by lazy {
         JarvisCommandRouter(
             legacyHandler = { text -> handleCommandInternal(text) },
@@ -1650,7 +1744,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     requestPermission = { permission, code ->
                         ActivityCompat.requestPermissions(this, arrayOf(permission), code)
                     },
-        reqPermissionsCode = REQ_PERMISSIONS,
+                    reqPermissionsCode = REQ_PERMISSIONS,
                     reqContactsCode = REQ_CONTACTS
                 ).execute(intent)
             },
@@ -1693,7 +1787,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // ---------------- IR remote control ----------------
-
     private fun sendIrCommand(action: String) {
         if (!irRemote.hasIrBlaster()) {
             respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 \u0645\u0631\u0633\u0644 \u0623\u0634\u0639\u0629 \u062A\u062D\u062A \u0627\u0644\u062D\u0645\u0631\u0627\u0621")
@@ -1711,9 +1804,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0631\u0633\u0644 \u0627\u0644\u0625\u0634\u0627\u0631\u0629")
         }
     }
-
     // ---------------- Security: defense mode + permission scanner ----------------
-
     private fun toggleDefenseMode(active: Boolean) {
         defenseModeActive = active
         if (::jarvisDial.isInitialized) {
@@ -1727,7 +1818,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639 \u0645\u0637\u0641\u0651\u0649")
         }
     }
-
     private fun runSecurityScan(statusView: TextView? = null) {
         respond("\u0646\u0641\u062D\u0635 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0648\u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A...")
         Thread {
@@ -1750,11 +1840,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }.start()
     }
-
     private fun runSecurityScanForPanel(statusView: TextView) = runSecurityScan(statusView)
-
     // ---------------- Bluetooth ----------------
-
     private fun scanBluetoothDevices(statusView: TextView? = null) {
         if (!bluetoothHelper.isBluetoothAvailable()) {
             respond("\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 Bluetooth")
@@ -1791,11 +1878,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         )
     }
-
     private fun scanBluetoothDevicesForPanel(statusView: TextView) = scanBluetoothDevices(statusView)
-
     // ---------------- Free cloud backup (Supabase) ----------------
-
     private fun backupNotesToCloud() {
         if (!cloudSync.isConfigured()) {
             respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
@@ -1815,7 +1899,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     private fun restoreNotesFromCloud() {
         if (!cloudSync.isConfigured()) {
             respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
@@ -1841,9 +1924,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
-
     private fun startPerfMonitor() {
         if (!BuildConfig.DEBUG) return
         val monitor = findViewById<TextView>(R.id.perfMonitor)
@@ -1854,12 +1935,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         lastFpsTimestamp = 0L
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
-
     private fun stopPerfMonitor() {
         perfMonitorRunning = false
         findViewById<TextView>(R.id.perfMonitor)?.visibility = View.GONE
     }
-
     private fun updatePerfMonitorText(fps: Int) {
         if (!BuildConfig.DEBUG) return
         val runtime = Runtime.getRuntime()
@@ -1872,15 +1951,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             monitor.setTextColor(android.graphics.Color.parseColor("#4A808A"))
         }
     }
-
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
-
     private fun setupSidebarUi() {
         val sidebarNav = findViewById<View>(R.id.sidebarNav)
         val contentArea = findViewById<View>(R.id.contentArea)
         val sidebarToggle = findViewById<TextView>(R.id.sidebarToggle)
         val topClock = findViewById<TextView>(R.id.topClock)
-
         // ---- \u062A\u0647\u064A\u0626\u0629 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0645\u0635\u063A\u0631\u0629 \u0627\u0644\u062F\u0627\u0626\u0631\u064A\u0629 \u062A\u062D\u062A \u0627\u0644\u0640 HUD ----
         miniMapView = findViewById(R.id.miniMapView)
         miniMapView.settings.javaScriptEnabled = true
@@ -1890,7 +1966,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         miniMapView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         miniMapView.addJavascriptInterface(MapBridgeInterface(), "MapBridge")
         miniMapView.loadUrl("file:///android_asset/mini_map.html")
-
         // ---- \u062A\u0647\u064A\u0626\u0629 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C (\u0645\u062E\u0641\u064A \u0644\u0648\u062F \u0627\u0644\u0641\u062A\u062D) ----
         miniBrowserView = findViewById(R.id.miniBrowserView)
         miniBrowserView.settings.javaScriptEnabled = true
@@ -1900,14 +1975,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         miniBrowserView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         miniBrowserView.addJavascriptInterface(BrowserBridgeInterface(), "BrowserBridge")
         miniBrowserView.loadUrl("file:///android_asset/mini_browser.html")
-
         // \u062F\u0627\u0626\u0631\u0629 \u062D\u0642\u064A\u0642\u064A\u0629 \u0644\u0632\u0631 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 (\u0628\u062F\u0648\u0646 \u0645\u0627 \u0646\u062D\u062A\u0627\u062C \u0645\u0644\u0641 drawable \u062C\u062F\u064A\u062F)
         sidebarToggle.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(android.graphics.Color.parseColor("#16232A"))
             setStroke(2, android.graphics.Color.parseColor("#3AA7B8"))
         }
-
         val navItems = mapOf(
             "HOME" to findViewById<TextView>(R.id.navHome),
             "MAP" to findViewById<TextView>(R.id.navMap),
@@ -1926,16 +1999,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             "AI" to findViewById<View>(R.id.aiPanel),
             "MORE" to findViewById<View>(R.id.morePanel)
         )
-
+        fun tintNavIcon(item: TextView, colorHex: String) {
+            val top = item.compoundDrawables.getOrNull(1) ?: return
+            val wrapped = DrawableCompat.wrap(top).mutate()
+            DrawableCompat.setTint(wrapped, android.graphics.Color.parseColor(colorHex))
+        }
         fun switchPanel(key: String) {
             panels.forEach { (k, panel) -> panel.visibility = if (k == key) View.VISIBLE else View.GONE }
             navItems.forEach { (k, item) ->
                 if (k == key) {
-                    item.setBackgroundColor(android.graphics.Color.parseColor("#16232A"))
+                    item.background = GradientDrawable().apply {
+                        cornerRadius = 10f
+                        setColor(android.graphics.Color.parseColor("#16232A"))
+                        setStroke(2, android.graphics.Color.parseColor("#3AA7B8"))
+                    }
                     item.setTextColor(android.graphics.Color.parseColor("#8DEFFF"))
+                    tintNavIcon(item, "#8DEFFF")
                 } else {
-                    item.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    item.background = null
                     item.setTextColor(android.graphics.Color.parseColor("#5C7A82"))
+                    tintNavIcon(item, "#5C7A82")
                 }
             }
             if (key == "SYS") refreshBatteryDisplay()
@@ -1944,17 +2027,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         navItems.forEach { (key, item) ->
             item.setOnClickListener { switchPanel(key) }
         }
+        switchPanel("HOME")
 
         // \u0632\u0631 \u0625\u062E\u0641\u0627\u0621/\u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629
         sidebarToggle.setOnClickListener {
             sidebarVisible = !sidebarVisible
             sidebarNav.visibility = if (sidebarVisible) View.VISIBLE else View.GONE
             val params = contentArea.layoutParams as ViewGroup.MarginLayoutParams
-            val marginPx = if (sidebarVisible) (64 * resources.displayMetrics.density).toInt() else 0
+            val marginPx = if (sidebarVisible) (72 * resources.displayMetrics.density).toInt() else 0
             params.marginStart = marginPx
             contentArea.layoutParams = params
         }
-
         // ---- \u0627\u0644\u0633\u0627\u0639\u0629 \u0627\u0644\u0639\u0644\u0648\u064A\u0629: \u062A\u062A\u062D\u062F\u062B \u0643\u0644 30 \u062B\u0627\u0646\u064A\u0629 \u0628\u062F\u0644 \u0645\u0627 \u062A\u0628\u0642\u0649 \u0648\u0627\u0642\u0641\u0629 \u0639\u0644\u0649 00:00 ----
         val timeFormat = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
         clockRunnable = object : Runnable {
@@ -1964,7 +2047,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
         clockHandler.post(clockRunnable)
-
         // ---- SYS panel: \u0623\u0632\u0631\u0627\u0631 \u062D\u0642\u064A\u0642\u064A\u0629 ----
         val flashButton = findViewById<TextView>(R.id.sysFlashToggle)
         flashButton.setOnClickListener {
@@ -1982,42 +2064,37 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.sysSettingsButton).setOnClickListener {
             openSystemSettings()
         }
-
         val sysStatus = findViewById<TextView>(R.id.sysStatusText)
-
         findViewById<TextView>(R.id.sysBluetoothButton).setOnClickListener {
             sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u0628\u062D\u062B \u0639\u0646 \u0623\u062C\u0647\u0632\u0629 Bluetooth..."
             scanBluetoothDevicesForPanel(sysStatus)
         }
-
         findViewById<TextView>(R.id.sysDefenseButton).setOnClickListener {
             toggleDefenseMode(!defenseModeActive)
             sysStatus.text = if (defenseModeActive) "\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639: \u0645\u0641\u0639\u0651\u0644" else "\u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639: \u0645\u0637\u0641\u0651\u0649"
         }
-
         findViewById<TextView>(R.id.sysScanButton).setOnClickListener {
             sysStatus.text = "\u062C\u0627\u0631\u064A \u0641\u062D\u0635 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A..."
             runSecurityScanForPanel(sysStatus)
         }
-
         findViewById<TextView>(R.id.sysIrButton).setOnClickListener {
             sendIrCommand("power")
             sysStatus.text = if (irRemote.hasIrBlaster()) "\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0625\u0634\u0627\u0631\u0629 IR" else "\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0627\u0641\u064A\u0634 \u0645\u0631\u0633\u0644 IR"
         }
-
         findViewById<TextView>(R.id.sysBackupButton).setOnClickListener {
             sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u062D\u0641\u0638 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629..."
             backupNotesToCloud()
         }
-
         findViewById<TextView>(R.id.sysRestoreButton).setOnClickListener {
             sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629..."
             restoreNotesFromCloud()
         }
-
+        findViewById<TextView>(R.id.sysVoiceGenderButton).setOnClickListener {
+            toggleVoiceGender()
+            sysStatus.text = if (isFemaleVoice) "\u0627\u0644\u0635\u0648\u062A: \u0623\u0646\u062B\u0648\u064A" else "\u0627\u0644\u0635\u0648\u062A: \u0631\u062C\u0627\u0644\u064A"
+        }
         // ---- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) ----
         val moreStatus = findViewById<TextView>(R.id.moreStatusText)
-
         findViewById<TextView>(R.id.moreFakeCallButton).setOnClickListener {
             jarvisSafetyModule.execute(JarvisIntent(JarvisIntentType.SAFETY_FAKE_CALL))
         }
@@ -2046,7 +2123,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.moreCompassButton).setOnClickListener {
             jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
-
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
@@ -2057,18 +2133,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         ) {
             fetchAndShowLocation()
         }
-
         // ---- LAB panel: \u0641\u062A\u062D DESIGN LAB ----
         findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
             startActivity(Intent(this, DesignLabActivity::class.java))
         }
-
         // ---- AI panel: \u0637\u0644\u0628 \u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u062D\u0642\u064A\u0642\u064A\u0629 \u0645\u0646 Gemini ----
         findViewById<TextView>(R.id.aiRefreshButton).setOnClickListener {
             fetchAiSuggestions()
         }
     }
-
     // \u064A\u0641\u062A\u062D \u0645\u0648\u0642\u0639 \u0648\u064A\u0628 \u0641\u064A \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C\u060C \u0648\u064A\u062E\u0641\u064A \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0645\u0624\u0642\u062A\u0627\u064B
     private fun openMiniBrowser(url: String) {
         val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
@@ -2077,12 +2150,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         miniBrowserView.visibility = View.VISIBLE
         miniBrowserView.evaluateJavascript("loadSite('$fullUrl');", null)
     }
-
     private fun closeMiniBrowser() {
         miniBrowserView.visibility = View.GONE
         miniMapView.visibility = View.VISIBLE
     }
-
     private fun toggleMiniBrowserSize() {
         val params = miniBrowserView.layoutParams as ViewGroup.MarginLayoutParams
         val density = resources.displayMetrics.density
@@ -2090,13 +2161,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         params.height = if (miniBrowserEnlarged) (280 * density).toInt() else (105 * density).toInt()
         miniBrowserView.layoutParams = params
     }
-
     private fun openFullscreenBrowser() {
         val intent = Intent(this, BrowserFullscreenActivity::class.java)
         intent.putExtra("url", lastBrowserUrl)
         startActivity(intent)
     }
-
     // \u0636\u063A\u0637\u062A\u064A\u0646 \u0639\u0644\u0649 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0627\u0644\u0635\u063A\u064A\u0631\u0629: \u062A\u0643\u0628\u0631/\u062A\u0631\u062C\u0639 \u0644\u062D\u062C\u0645\u0647\u0627 \u0627\u0644\u0623\u0635\u0644\u064A
     private fun toggleMiniMapSize() {
         val params = miniMapView.layoutParams as ViewGroup.MarginLayoutParams
@@ -2105,7 +2174,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         params.height = if (miniMapEnlarged) (260 * density).toInt() else (130 * density).toInt()
         miniMapView.layoutParams = params
     }
-
     // 3 \u0636\u063A\u0637\u0627\u062A: \u062A\u0641\u062A\u062D \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0641\u064A \u0634\u0627\u0634\u0629 \u0643\u0627\u0645\u0644\u0629 \u0645\u0633\u062A\u0642\u0644\u0629
     private fun openFullscreenMap() {
         val intent = Intent(this, MapFullscreenActivity::class.java)
@@ -2113,12 +2181,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         intent.putExtra("lon", lastKnownLon)
         startActivity(intent)
     }
-
     private fun refreshBatteryDisplay() {
         val level = getBatteryLevel()
         findViewById<TextView>(R.id.sysBattery).text = "BATTERY: $level%"
     }
-
     private fun requestDeviceLocation() {
         val statusView = findViewById<TextView>(R.id.mapStatus)
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -2131,7 +2197,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         fetchAndShowLocation()
     }
-
     private fun fetchAndShowLocation() {
         val statusView = findViewById<TextView>(R.id.mapStatus)
         try {
@@ -2185,7 +2250,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             findViewById<TextView>(R.id.mapStatus).text = "\u062E\u062F\u0645\u0629 \u0627\u0644\u0645\u0648\u0642\u0639 \u0645\u0637\u0641\u0623\u0629 \u0641\u064A \u0627\u0644\u062C\u0647\u0627\u0632"
             return
         }
-
         val listener = object : android.location.LocationListener {
             override fun onLocationChanged(location: Location) {
                 showLocationOnUi(location)
@@ -2198,7 +2262,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 findViewById<TextView>(R.id.mapStatus).text = "\u062E\u062F\u0645\u0629 \u0627\u0644\u0645\u0648\u0642\u0639 \u0645\u0637\u0641\u0623\u0629"
             }
         }
-
         try {
             locationManager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
         } catch (e: Exception) {
@@ -2206,7 +2269,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             findViewById<TextView>(R.id.mapStatus).text = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0627\u0644\u0645\u0648\u0642\u0639"
         }
     }
-
     private fun fetchAiSuggestions() {
         val suggestionsView = findViewById<TextView>(R.id.aiSuggestionsText)
         val refreshButton = findViewById<TextView>(R.id.aiRefreshButton)
@@ -2215,7 +2277,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             return
         }
         refreshButton.text = "...\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u0648\u0644\u064A\u062F"
-
         val prompt = "Give exactly 3 short, practical productivity or app-usage tips, each one line, no numbering, no markdown."
         geminiClient.generateSimple(
             prompt = prompt,
@@ -2234,7 +2295,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         )
     }
-
     private fun setupModuleMenu() {
         jarvisDial.setModuleClickListener { module ->
             log("\u0636\u063A\u0637 \u0632\u0631 \u0627\u0644\u0645\u0646\u064A\u0648: $module")
@@ -2256,7 +2316,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     private fun showAppsModule() {
         try {
             val pm = packageManager
@@ -2264,7 +2323,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
                 .sortedBy { pm.getApplicationLabel(it).toString() }
                 .take(6)
-
             appNameToPackage.clear()
             val names = mutableListOf<String>()
             for (info in launchables) {
@@ -2278,7 +2336,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A")
         }
     }
-
     private fun openSystemSettings() {
         try {
             startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
@@ -2287,7 +2344,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062A\u062D \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A")
         }
     }
-
     private fun openAlarmsList() {
         try {
             startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS))
@@ -2296,7 +2352,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062A\u062D \u0627\u0644\u0645\u0646\u0628\u0647\u0627\u062A")
         }
     }
-
     private fun openApp(packageName: String, appName: String) {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         if (launchIntent != null) {
@@ -2306,15 +2361,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("$appName \u0645\u0634 \u0645\u062B\u0628\u062A \u0639\u0644\u0649 \u062C\u0647\u0627\u0632\u0643")
         }
     }
-
     // ---------------- Call a contact ----------------
-
     private fun extractNameAfter(cmd: String, marker: String): String {
         val idx = cmd.indexOf(marker)
         if (idx == -1) return ""
         return cmd.substring(idx + marker.length).trim()
     }
-
     private fun callContact(name: String) {
         if (name.isBlank()) {
             respond("\u0642\u0644\u064A \u0645\u064A\u0646 \u0628\u062F\u0643 \u0623\u062A\u0635\u0644 \u0641\u064A\u0647")
@@ -2374,7 +2426,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     private fun writeCode(topic: String) {
         if (topic.isBlank()) {
             respond("\u0642\u0644\u064A \u0634\u0648 \u0627\u0644\u0643\u0648\u062F \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u064A\u0627\u0647")
@@ -2388,7 +2439,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val prompt = "\u0627\u0643\u062A\u0628 \u0643\u0648\u062F \u0628\u0631\u0645\u062C\u064A \u0648\u0627\u0636\u062D \u0648\u0645\u0631\u062A\u0628 \u0644\u0640: $topic. \u0627\u0634\u0631\u062D \u0628\u062C\u0645\u0644\u0629 \u0642\u0635\u064A\u0631\u0629 \u0634\u0648 \u0628\u064A\u0633\u0648\u064A \u0627\u0644\u0643\u0648\u062F."
         askGeminiForCode(prompt)
     }
-
     private fun askGeminiForCode(prompt: String) {
         val jsonBody = JSONObject().apply {
             put("contents", JSONArray().put(
@@ -2436,7 +2486,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // ---------------- Holographic-style product design ----------------
-
     private fun designHologram(description: String) {
         if (description.isBlank()) {
             respond("\u0642\u0644\u064A \u0648\u0635\u0641 \u0627\u0644\u0645\u0646\u062A\u062C \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u0635\u0645\u0645\u0647")
@@ -2452,7 +2501,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 "\u0628\u0634\u0643\u0644 \u0646\u0642\u0627\u0637 \u0642\u0635\u064A\u0631\u0629 \u062A\u0635\u0644\u062D \u062A\u0646\u0639\u0631\u0636 \u0628\u0634\u0627\u0634\u0629 \u0647\u0648\u0644\u0648\u062C\u0631\u0627\u0645\u064A\u0629"
         askGeminiForHologram(prompt)
     }
-
     private fun askGeminiForHologram(prompt: String) {
         val jsonBody = JSONObject().apply {
             put("contents", JSONArray().put(
@@ -2471,12 +2519,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .addHeader("x-goog-api-key", GEMINI_API_KEY)
             .post(body)
             .build()
-
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
             }
-
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val responseText = response.body?.string() ?: ""
@@ -2498,14 +2544,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         })
     }
-
     private fun showHologramDialog(specText: String) {
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-
         val container = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#000000"))
         }
-
         val textView = TextView(this).apply {
             text = specText
             setTextColor(Color.parseColor("#00F6FF"))
@@ -2520,7 +2563,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER }
         container.addView(textView, textParams)
-
         val closeButton = Button(this).apply {
             text = "\u2715 \u0625\u063A\u0644\u0627\u0642"
             setTextColor(Color.parseColor("#00F6FF"))
@@ -2536,10 +2578,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             rightMargin = 40
         }
         container.addView(closeButton, closeParams)
-
         dialog.setContentView(container)
         dialog.show()
-
         ObjectAnimator.ofFloat(textView, "rotationY", 0f, 360f).apply {
             duration = 6000
             repeatCount = ObjectAnimator.INFINITE
@@ -2552,9 +2592,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             start()
         }
     }
-
     // ---------------- Explain any topic (geology, etc.) via Gemini ----------------
-
     private fun extractExplainTopic(cmd: String): String {
         val marker = when {
             cmd.contains("\u0627\u0634\u0631\u062D\u0644\u064A") -> "\u0627\u0634\u0631\u062D\u0644\u064A"
@@ -2566,7 +2604,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         return extractNameAfter(cmd, marker)
     }
-
     private val offlineKnowledge = mapOf(
         "\u0627\u0644\u0627\u0633\u0644\u0627\u0645" to "\u0627\u0644\u0625\u0633\u0644\u0627\u0645 \u062F\u064A\u0646 \u062A\u0648\u062D\u064A\u062F\u064A\u060C \u0646\u0632\u0644 \u0639\u0644\u0649 \u0627\u0644\u0646\u0628\u064A \u0645\u062D\u0645\u062F \u0635\u0644\u0649 \u0627\u0644\u0644\u0647 \u0639\u0644\u064A\u0647 \u0648\u0633\u0644\u0645 \u0628\u0627\u0644\u0642\u0631\u0622\u0646 \u0627\u0644\u0643\u0631\u064A\u0645. \u0645\u0646 \u0623\u0631\u0643\u0627\u0646\u0647 \u0627\u0644\u062E\u0645\u0633\u0629: \u0627\u0644\u0634\u0647\u0627\u062F\u062A\u064A\u0646\u060C \u0627\u0644\u0635\u0644\u0627\u0629\u060C \u0627\u0644\u0632\u0643\u0627\u0629\u060C \u0627\u0644\u0635\u064A\u0627\u0645 \u0628\u0631\u0645\u0636\u0627\u0646\u060C \u0648\u0627\u0644\u062D\u062C \u0644\u0645\u0646 \u0627\u0633\u062A\u0637\u0627\u0639. \u064A\u0624\u0645\u0646 \u0627\u0644\u0645\u0633\u0644\u0645\u0648\u0646 \u0628\u0627\u0644\u0644\u0647 \u0627\u0644\u0648\u0627\u062D\u062F\u060C \u0648\u0628\u0627\u0644\u0623\u0646\u0628\u064A\u0627\u0621 \u0648\u0627\u0644\u0631\u0633\u0644 \u0645\u0646 \u0642\u0628\u0644 \u0645\u062D\u0645\u062F \u0645\u062A\u0644 \u0645\u0648\u0633\u0649 \u0648\u0639\u064A\u0633\u0649 \u0639\u0644\u064A\u0647\u0645 \u0627\u0644\u0633\u0644\u0627\u0645.",
         "\u0627\u0644\u0645\u0633\u064A\u062D\u064A\u0629" to "\u0627\u0644\u0645\u0633\u064A\u062D\u064A\u0629 \u062F\u064A\u0646 \u062A\u0648\u062D\u064A\u062F\u064A \u064A\u0642\u0648\u0645 \u0639\u0644\u0649 \u062A\u0639\u0627\u0644\u064A\u0645 \u0627\u0644\u0633\u064A\u062F \u0627\u0644\u0645\u0633\u064A\u062D \u0639\u064A\u0633\u0649 \u0628\u0646 \u0645\u0631\u064A\u0645 \u0643\u0645\u0627 \u0648\u0631\u062F\u062A \u0628\u0627\u0644\u0625\u0646\u062C\u064A\u0644. \u0645\u0646 \u0623\u0647\u0645 \u0645\u0639\u062A\u0642\u062F\u0627\u062A\u0647\u0627 \u0641\u0643\u0631\u0629 \u0627\u0644\u062B\u0627\u0644\u0648\u062B \u0627\u0644\u0623\u0642\u062F\u0633 (\u0627\u0644\u0622\u0628 \u0648\u0627\u0644\u0627\u0628\u0646 \u0648\u0627\u0644\u0631\u0648\u062D \u0627\u0644\u0642\u062F\u0633)\u060C \u0648\u0637\u0642\u0648\u0633\u0647\u0627 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u062A\u0634\u0645\u0644 \u0627\u0644\u0645\u0639\u0645\u0648\u062F\u064A\u0629 \u0648\u0627\u0644\u0642\u0631\u0628\u0627\u0646 \u0627\u0644\u0645\u0642\u062F\u0633\u060C \u0648\u0641\u064A\u0647\u0627 \u0637\u0648\u0627\u0626\u0641 \u0643\u0628\u0631\u0649 \u0645\u062A\u0644 \u0627\u0644\u0643\u0627\u062B\u0648\u0644\u064A\u0643 \u0648\u0627\u0644\u0623\u0631\u062B\u0648\u0630\u0643\u0633 \u0648\u0627\u0644\u0628\u0631\u0648\u062A\u0633\u062A\u0627\u0646\u062A.",
@@ -2574,19 +2611,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         "\u0627\u0644\u0628\u0648\u0630\u064A\u0629" to "\u0627\u0644\u0628\u0648\u0630\u064A\u0629 \u062F\u064A\u0627\u0646\u0629 \u0648\u0641\u0644\u0633\u0641\u0629 \u0631\u0648\u062D\u064A\u0629 \u0623\u0633\u0633\u0647\u0627 \u0633\u064A\u062F\u0647\u0627\u0631\u062A\u0627 \u063A\u0648\u062A\u0627\u0645\u0627 (\u0628\u0648\u0630\u0627) \u0628\u0627\u0644\u0647\u0646\u062F. \u062A\u0631\u0643\u0632 \u0639\u0644\u0649 \u062A\u062D\u0642\u064A\u0642 \u0627\u0644\u062A\u0646\u0648\u064A\u0631 \u0648\u0627\u0644\u062A\u062D\u0631\u0631 \u0645\u0646 \u0627\u0644\u0645\u0639\u0627\u0646\u0627\u0629 \u0639\u0646 \u0637\u0631\u064A\u0642 \u0627\u062A\u0628\u0627\u0639 \u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u062B\u0645\u0627\u0646\u064A \u0627\u0644\u0646\u0628\u064A\u0644\u060C \u0648\u062A\u0624\u0645\u0646 \u0628\u0645\u0628\u062F\u0623 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062C\u0633\u062F (\u0627\u0644\u0643\u0627\u0631\u0645\u0627).",
         "\u0627\u0644\u0647\u0646\u062F\u0648\u0633\u064A\u0629" to "\u0627\u0644\u0647\u0646\u062F\u0648\u0633\u064A\u0629 \u0645\u0646 \u0623\u0642\u062F\u0645 \u0627\u0644\u062F\u064A\u0627\u0646\u0627\u062A \u0628\u0627\u0644\u0639\u0627\u0644\u0645\u060C \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0622\u0644\u0647\u0629 \u0648\u0641\u064A\u0647\u0627 \u0641\u0644\u0633\u0641\u0627\u062A \u0645\u062A\u0646\u0648\u0639\u0629. \u062A\u0624\u0645\u0646 \u0628\u0645\u0628\u062F\u0623 \u0627\u0644\u0643\u0627\u0631\u0645\u0627 \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062C\u0633\u062F (\u0627\u0644\u062A\u0646\u0627\u0633\u062E)\u060C \u0648\u0643\u062A\u0628\u0647\u0627 \u0627\u0644\u0645\u0642\u062F\u0633\u0629 \u062A\u0634\u0645\u0644 \u0627\u0644\u0641\u064A\u062F\u0627 \u0648\u0627\u0644\u0628\u0647\u0627\u063A\u0627\u0641\u0627\u062F\u063A\u064A\u062A\u0627\u060C \u0648\u0623\u0647\u0645 \u0622\u0644\u0647\u062A\u0647\u0627 \u0628\u0631\u0627\u0647\u0645\u0627 \u0648\u0641\u064A\u0634\u0646\u0648 \u0648\u0634\u064A\u0641\u0627."
     )
-
     private fun explainTopic(topic: String) {
         if (topic.isBlank()) {
             respond("\u0642\u0644\u064A \u0634\u0648 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u064A\u0644\u064A \u0628\u062F\u0643 \u0623\u0634\u0631\u062D\u0644\u0643 \u064A\u0627\u0647")
             return
         }
-
         val offlineMatch = offlineKnowledge.entries.firstOrNull { topic.contains(it.key) }
         if (offlineMatch != null) {
             respond(offlineMatch.value)
             return
         }
-
         if (GEMINI_API_KEY.isBlank()) {
             respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0634\u0631\u062D\u0644\u0643 \u0645\u0648\u0627\u0636\u064A\u0639 \u0632\u064A\u0627\u062F\u0629")
             return
@@ -2595,14 +2629,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val prompt = "\u0627\u0634\u0631\u062D\u0644\u064A \u0645\u0648\u0636\u0648\u0639 \"$topic\" \u0628\u0637\u0631\u064A\u0642\u0629 \u0633\u0647\u0644\u0629 \u0648\u0645\u0628\u0633\u0637\u0629 \u0645\u0639 \u0645\u062B\u0627\u0644 \u0625\u0630\u0627 \u0623\u0645\u0643\u0646\u060C \u0628\u0623\u0633\u0644\u0648\u0628 \u0642\u0631\u064A\u0628 \u0648\u0645\u0641\u0647\u0648\u0645"
         askGemini(prompt)
     }
-
     // ---------------- Unit converter ----------------
-
     private fun convertUnits(cmd: String): String {
         val numberRegex = Regex("""(\d+(?:\.\d+)?)""")
         val match = numberRegex.find(cmd) ?: return "\u0642\u0644\u064A \u0627\u0644\u0631\u0642\u0645 \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u062D\u0648\u0644\u0647"
         val value = match.groupValues[1].toDouble()
-
         return when {
             cmd.contains("\u0643\u064A\u0644\u0648\u0645\u062A\u0631") && cmd.contains("\u0645\u064A\u0644") -> {
                 val miles = value * 0.621371
@@ -2619,9 +2650,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             else -> "\u0642\u0644\u064A \u0627\u0644\u062A\u062D\u0648\u064A\u0644 \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u062D\u0648\u0644 10 \u0643\u064A\u0644\u0648\u0645\u062A\u0631 \u0627\u0644\u0649 \u0645\u064A\u0644"
         }
     }
-
     // ---------------- Fun facts ----------------
-
     private val funFacts = listOf(
         "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0635\u062D\u0631\u0627\u0621 \u0627\u0644\u062C\u0632\u0627\u0626\u0631 (\u0627\u0644\u0635\u062D\u0631\u0627\u0621 \u0627\u0644\u0643\u0628\u0631\u0649) \u062A\u063A\u0637\u064A \u0623\u0643\u062A\u0631 \u0645\u0646 80% \u0645\u0646 \u0645\u0633\u0627\u062D\u0629 \u0627\u0644\u0628\u0644\u0627\u062F.",
         "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0639\u0633\u0644 \u0645\u0627 \u064A\u0641\u0633\u062F\u0634 \u0623\u0628\u062F\u064B\u0627\u060C \u062D\u062A\u0649 \u0628\u0639\u062F \u0622\u0644\u0627\u0641 \u0627\u0644\u0633\u0646\u064A\u0646.",
@@ -2630,9 +2659,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0636\u0648\u0621 \u0645\u0646 \u0627\u0644\u0634\u0645\u0633 \u064A\u0648\u0635\u0644 \u0644\u0644\u0623\u0631\u0636 \u0628\u062D\u0648\u0627\u0644\u064A 8 \u062F\u0642\u0627\u064A\u0642 \u0628\u0633.",
         "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u062C\u0628\u0644 \u0637\u0648\u0628\u0642\u0627\u0644 \u0628\u0627\u0644\u0645\u063A\u0631\u0628 \u0647\u0648 \u0623\u0639\u0644\u0649 \u0642\u0645\u0629 \u0628\u0634\u0645\u0627\u0644 \u0623\u0641\u0631\u064A\u0642\u064A\u0627."
     )
-
     // ---------------- Suggestions ----------------
-
     private fun suggestDrawing(): String {
         val ideas = listOf(
             "\u0627\u0631\u0633\u0645 \u0645\u0646\u0638\u0631 \u0637\u0628\u064A\u0639\u064A \u0641\u064A\u0647 \u062C\u0628\u0627\u0644 \u0648\u0628\u062D\u0631",
@@ -2643,7 +2670,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         )
         return "\u0641\u0643\u0631\u0629 \u0631\u0633\u0645\u0629 \u0627\u0644\u064A\u0648\u0645: ${ideas.random()}"
     }
-
     private fun suggestBreakfast(): String {
         val ideas = listOf(
             "\u0628\u064A\u0636 \u0645\u0639 \u0632\u0639\u062A\u0631 \u0648\u0632\u064A\u062A \u0632\u064A\u062A\u0648\u0646 \u0648\u062E\u0628\u0632 \u0637\u0627\u0632\u0629",
@@ -2654,10 +2680,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         )
         return "\u0627\u0642\u062A\u0631\u0627\u062D \u0641\u0637\u0648\u0631 \u0627\u0644\u064A\u0648\u0645: ${ideas.random()}"
     }
-
     // ---------------- Distance between cities ----------------
     // \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062F\u0646 \u0627\u0646\u062A\u0642\u0644\u062A \u0644\u0645\u0644\u0641 CityCoordinates.kt \u0645\u0646\u0641\u0635\u0644 (\u0644\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0643\u0648\u062F)
-
     private fun handleDistanceQuery(cmd: String) {
         val regex = Regex("""\u0645\u0646\s+(\S+)\s+(?:\u0627\u0644\u0649|\u0625\u0644\u0649)\s+(\S+)""")
         val match = regex.find(cmd)
@@ -2667,7 +2691,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         val cityA = match.groupValues[1]
         val cityB = match.groupValues[2]
-
         if (GOOGLE_MAPS_API_KEY.isNotBlank()) {
             respond("\u0628\u062D\u0633\u0628...")
             askGoogleDistance(cityA, cityB)
@@ -2675,19 +2698,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond(calculateDistanceOffline(cityA, cityB))
         }
     }
-
     private fun askGoogleDistance(cityA: String, cityB: String) {
         val originEnc = java.net.URLEncoder.encode(cityA, "UTF-8")
         val destEnc = java.net.URLEncoder.encode(cityB, "UTF-8")
         val url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
                 "?origins=$originEnc&destinations=$destEnc&key=$GOOGLE_MAPS_API_KEY"
         val request = Request.Builder().url(url).get().build()
-
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
             }
-
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val responseText = response.body?.string() ?: ""
@@ -2739,11 +2759,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // ---------------- Output helpers ----------------
-
     private fun respond(text: String) {
         log("\u062C\u0627\u0631\u0641\u0633: $text")
         speechRecognizer?.stopListening()
-
         // \u0644\u0645\u062D\u0631\u0643\u0627\u062A TTS \u062D\u062F \u0623\u0642\u0635\u0649 \u0644\u0637\u0648\u0644 \u0627\u0644\u0646\u0635 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621 \u0627\u0644\u0648\u0627\u062D\u062F \u2014 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 (\u0645\u062B\u0644 \u0631\u062F\u0648\u062F Gemini) \u0643\u0627\u0646 \u064A\u062A\u0642\u0637\u0639 \u0628\u0635\u0645\u062A. \u0646\u0642\u0633\u0651\u0645\u0647 \u0644\u062C\u0645\u0644 \u0648\u0646\u0631\u0633\u0644\u0647\u0645 \u0648\u0627\u062D\u062F \u0628\u0648\u0627\u062D\u062F
         val maxLen = try {
             TextToSpeech.getMaxSpeechInputLength().takeIf { it > 0 } ?: 3800
@@ -2758,7 +2776,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             tts.speak(chunk, mode, null, utteranceIds[index])
         }
     }
-
     // \u064A\u0642\u0633\u0651\u0645 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 \u0639\u0644\u0649 \u062D\u062F\u0648\u062F \u0627\u0644\u062C\u0645\u0644 \u0642\u062F\u0631 \u0627\u0644\u0625\u0645\u0643\u0627\u0646 (\u0645\u0627 \u064A\u0642\u0637\u0639\u0634 \u0641\u064A \u0646\u0635 \u0643\u0644\u0645\u0629) \u0628\u062F\u0648\u0646 \u0645\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 maxLen
     private fun splitTextForSpeech(text: String, maxLen: Int): List<String> {
         if (text.length <= maxLen) return listOf(text)
@@ -2789,11 +2806,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (current.isNotEmpty()) chunks.add(current.toString().trim())
         return chunks.filter { it.isNotBlank() }
     }
-
     private fun log(text: String) {
         logText.append("\n\n$text")
     }
-
     // \u064A\u062A\u0645 \u0627\u0633\u062A\u062F\u0639\u0627\u0624\u0647 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0645\u0644\u064A \u064A\u0642\u062A\u0631\u0628 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u062E\u0627\u0635\u064A\u0629 \u0627\u0644\u0647\u0627\u062A\u0641 \u0645\u0646 \u0628\u0637\u0627\u0642\u0629 NFC (\u0628\u0641\u0636\u0644 enableForegroundDispatch)
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -2802,11 +2817,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0628\u0637\u0627\u0642\u0629: $tagContent")
         }
     }
-
     // \u0632\u0631 \u0627\u0644\u0623\u0631\u0628\u0648\u062F\u0632/\u0627\u0644\u0633\u0645\u0627\u0639\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629: 3 \u0636\u063A\u0637\u0627\u062A \u0633\u0631\u064A\u0639\u0629 \u062E\u0644\u0627\u0644 \u062B\u0627\u0646\u064A\u0629 \u0648\u0627\u062D\u062F\u0629 \u062A\u0628\u062F\u0623 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639
     private var headsetPressCount = 0
     private var lastHeadsetPressTime = 0L
-
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
         if (keyCode == android.view.KeyEvent.KEYCODE_HEADSETHOOK ||
             keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
@@ -2829,7 +2842,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         return super.onKeyDown(keyCode, event)
     }
-
     override fun onPause() {
         super.onPause()
         // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629 (\u064A\u0648\u0641\u0631 \u0628\u0637\u0627\u0631\u064A\u0629 \u0648\u064A\u0645\u0646\u0639 \u0627\u0644\u0645\u0627\u064A\u0643 \u064A\u0628\u0642\u0649 \u062E\u0627\u062F\u0645)
@@ -2851,7 +2863,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             jarvisDial.pauseAnimation()
         }
     }
-
     override fun onResume() {
         super.onResume()
         if (::jarvisDial.isInitialized) {
@@ -2887,12 +2898,5 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         tts.shutdown()
         stopMusic()
         speechRecognizer?.destroy()
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
-            jarvisGeologyModule.onPhotoCaptured()
-        }
     }
 }
