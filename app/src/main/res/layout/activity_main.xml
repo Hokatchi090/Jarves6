@@ -59,7 +59,7 @@
     <!-- Left sidebar navigation -->
     <LinearLayout
         android:id="@+id/sidebarNav"
-        android:layout_width="64dp"
+        android:layout_width="72dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
         android:orientation="vertical"
@@ -69,12 +69,15 @@
         <TextView
             android:id="@+id/navHome"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="HOME"
             android:textColor="#8DEFFF"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_home"
+            android:drawablePadding="4dp"
             android:background="#16232A"
             android:clickable="true"
             android:focusable="true" />
@@ -82,74 +85,148 @@
         <TextView
             android:id="@+id/navMap"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="MAP"
             android:textColor="#5C7A82"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_map"
+            android:drawablePadding="4dp"
             android:clickable="true"
             android:focusable="true" />
 
         <TextView
             android:id="@+id/navLab"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="LAB"
             android:textColor="#5C7A82"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_lab"
+            android:drawablePadding="4dp"
             android:clickable="true"
             android:focusable="true" />
 
         <TextView
             android:id="@+id/navSys"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="SYS"
             android:textColor="#5C7A82"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_sys"
+            android:drawablePadding="4dp"
             android:clickable="true"
             android:focusable="true" />
 
         <TextView
             android:id="@+id/navNet"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="NET"
             android:textColor="#5C7A82"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_net"
+            android:drawablePadding="4dp"
             android:clickable="true"
             android:focusable="true" />
 
         <TextView
             android:id="@+id/navAi"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="AI"
             android:textColor="#5C7A82"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_ai"
+            android:drawablePadding="4dp"
             android:clickable="true"
             android:focusable="true" />
 
         <TextView
             android:id="@+id/navMore"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="60dp"
             android:gravity="center"
             android:text="MORE"
             android:textColor="#5C7A82"
             android:textSize="9sp"
             android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_more"
+            android:drawablePadding="4dp"
             android:clickable="true"
             android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Live status/log panel (mustawa7 min alHUD al-marja3i: dot + label + ticker) -->
+    <LinearLayout
+        android:id="@+id/hudStatusPanel"
+        android:layout_width="170dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="50dp"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#10151B">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/hudStatusDot"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/status_dot" />
+
+            <TextView
+                android:id="@+id/hudStatusLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="NOMINAL"
+                android:textColor="#8DEFFF"
+                android:textSize="9sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.03" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/hudLogScroll"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none">
+
+            <TextView
+                android:id="@+id/hudLogTicker"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#4E7A82"
+                android:textSize="7.5sp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="1dp" />
+        </ScrollView>
     </LinearLayout>
 
     <!-- Content area (to the right of sidebar, below top bar) -->
@@ -483,6 +560,27 @@
                     android:layout_weight="1"
                     android:gravity="center"
                     android:text="RESTORE"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="#142A30"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp">
+
+                <TextView
+                    android:id="@+id/sysVoiceGenderButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="VOICE: MALE"
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
