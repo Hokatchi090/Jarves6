@@ -618,8 +618,23 @@
                     android:layout_width="0dp"
                     android:layout_height="46dp"
                     android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
                     android:gravity="center"
                     android:text="VOICE: MALE"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysLangButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="LANG: ARABIC"
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
@@ -773,6 +788,16 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="PHONE: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profileEmergencyContact"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="EMERGENCY CONTACT: --"
                     android:textColor="#D7FBFF"
                     android:textSize="13sp"
                     android:fontFamily="monospace" />
