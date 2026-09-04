@@ -98,16 +98,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             notebook = fieldNotebook,
             compass = geoCompass,
             speak = { msg -> respond(msg) },
-            getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) }
-       activity = this   // ← أضف هذا السطر
-    )
-}
+            getCurrentLocation = { Pair(lastKnownLat, lastKnownLon) },
+            activity = this
+        )
+    }
 
-// 2. أضف في onActivityResult
-if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
-    jarvisGeologyModule.onPhotoCaptured()
-}     
-    
     
     private val jarvisSafetyModule by lazy {
         JarvisSafetyModule(
@@ -297,7 +292,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         if (startImmediately) startListening()
     }
 
-    // ---------------- HUD status panel (\u0644\u0648\u062D\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 + \u0627\u0644\u0633\u062C\u0644 \u0627\u0644\u062D\u064A) ----------------
+    // ---------------- HUD status panel (لوحة الحالة + السجل الحي) ----------------
 
     private fun setupHudStatusPanel() {
         hudStatusDot = findViewById(R.id.hudStatusDot)
@@ -311,7 +306,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             runOnUiThread { updateHudStatusPanel(state) }
         }
 
-        // \u0645\u0631\u0622\u0629 \u0627\u0644\u0633\u062C\u0644 \u0627\u0644\u062F\u0627\u062E\u0644\u064A (logText \u0627\u0644\u062E\u0641\u064A) \u0625\u0644\u0649 \u0644\u0648\u062D\u0629 \u062D\u064A\u0629 \u0638\u0627\u0647\u0631\u0629\u060C \u0628\u062F\u0648\u0646 \u0627\u0644\u062D\u0627\u062C\u0629 \u0644\u062A\u0639\u062F\u064A\u0644 \u0623\u064A \u0645\u0643\u0627\u0646 \u0622\u062E\u0631 \u064A\u0646\u0627\u062F\u064A log()
         logText.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -371,12 +365,11 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
     // \u0645\u0644\u0627\u062D\u0638\u0629: JarvisDialView \u0627\u0644\u062C\u062F\u064A\u062F \u064A\u062D\u0631\u0643 \u0646\u0641\u0633\u0647 \u062F\u0627\u062E\u0644\u064A\u064B\u0627 \u0639\u0628\u0631 postInvalidateOnAnimation()\u060C \u0641\u0645\u0627 \u0639\u0627\u062F \u0641\u064A\u0647 \u062D\u0627\u062C\u0629 \u0644\u062F\u0648\u0627\u0644 \u062A\u062F\u0648\u064A\u0631 \u062E\u0627\u0631\u062C\u064A\u0629
 
     // \u062A\u062E\u062A\u0627\u0631 \u0623\u0642\u0631\u0628 \u0635\u0648\u062A \u0631\u062C\u0627\u0644\u064A \u0645\u062A\u0648\u0641\u0631 \u0644\u0644\u063A\u0629 \u0645\u0639\u064A\u0646\u0629 \u0639\u0644\u0649 \u0645\u062D\u0631\u0643 TTS. \u064A\u0637\u0628\u0651\u0642 \u0628\u0639\u062F \u0643\u0644 \u062A\u063A\u064A\u064A\u0631 \u0644\u063A\u0629 \u0639\u0634\u0627\u0646 \u0627\u0644\u0635\u0648\u062A \u064A\u0628\u0642\u0649 \u0631\u062C\u0627\u0644\u064A \u0641\u064A \u0643\u0644 \u0627\u0644\u0644\u063A\u0627\u062A\u060C \u0645\u0627\u0634\u064A \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0628\u0631\u0643 \u0641\u0642\u0637
-    // \u062D\u0627\u0644\u0629 \u062C\u0646\u0633 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u062D\u0627\u0644\u064A\u0629: false = \u0631\u062C\u0627\u0644\u064A (\u0627\u0641\u062A\u0631\u0627\u0636\u064A)\u060C true = \u0623\u0646\u062B\u0648\u064A. \u062A\u064F\u062D\u0641\u0638 \u0628\u064A\u0646 \u062C\u0644\u0633\u0627\u062A \u0627\u0644\u062A\u0634\u063A\u064A\u0644
+    // حالة جنس الصوت الحالية: false = رجالي (افتراضي)، true = أنثوي. تُحفظ بين جلسات التشغيل
     private var isFemaleVoice: Boolean = false
 
     private fun applyMaleVoiceForCurrentLanguage() {
         val langVoices = tts.voices?.filter { it.locale.language == tts.language.language }
-        // \u0646\u0641\u0644\u062A\u0631 \u062D\u0633\u0628 \u0627\u0644\u062C\u0646\u0633 \u0627\u0644\u0645\u062E\u062A\u0627\u0631 \u062D\u0627\u0644\u064A\u0627\u064B (isFemaleVoice)\u060C \u0648\u0646\u0631\u062A\u0651\u0628\u0647\u0645 \u062D\u0633\u0628 \u0627\u0644\u062C\u0648\u062F\u0629 (\u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 = \u0635\u0648\u062A \u0623\u0637\u0628\u064A\u0639\u064A \u0623\u0643\u062B\u0631)
         val genderCandidates = langVoices?.filter { voice ->
             val n = voice.name.lowercase(Locale.ROOT)
             if (isFemaleVoice) {
@@ -388,13 +381,11 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         }?.sortedByDescending { it.quality }
 
         val bestVoice = genderCandidates?.firstOrNull()
-            // \u0644\u0648 \u0645\u0627\u0644\u0642\u064A\u0646\u0627\u0634 \u0635\u0648\u062A \u0645\u0643\u062A\u0648\u0628 \u0639\u0644\u064A\u0647 \u0627\u0644\u062C\u0646\u0633 \u0635\u0631\u064A\u062D\u060C \u0646\u062E\u0644\u064A \u0623\u0639\u0644\u0649 \u062C\u0648\u062F\u0629 \u0645\u062A\u0648\u0641\u0631\u0629 \u0648\u0646\u0639\u062A\u0645\u062F \u0639\u0644\u0649 \u0627\u0644\u0637\u0628\u0642\u0629 \u0627\u0644\u0645\u0646\u062E\u0641\u0636\u0629 (pitch) \u0628\u0627\u0634 \u062A\u0628\u0627\u0646 \u0623\u0642\u0631\u0628 \u0644\u0644\u062C\u0646\u0633 \u0627\u0644\u0645\u0637\u0644\u0648\u0628
             ?: langVoices?.sortedByDescending { it.quality }?.firstOrNull()
 
         if (bestVoice != null) {
             tts.voice = bestVoice
         }
-        // \u0646\u062E\u0641\u0636/\u0646\u0631\u0641\u0639 \u0627\u0644\u0637\u0628\u0642\u0629 \u062D\u0633\u0628 \u0627\u0644\u062C\u0646\u0633: \u0627\u0644\u0623\u0646\u062B\u0648\u064A \u0623\u0639\u0644\u0649 \u0642\u0644\u064A\u0644\u0627\u064B\u060C \u0627\u0644\u0631\u062C\u0627\u0644\u064A \u0623\u062E\u0641\u0636 \u0648\u0623\u0642\u0631\u0628 \u0644\u0637\u0627\u0628\u0639 "\u062C\u0627\u0631\u0641\u0633"
         val foundGenderVoice = genderCandidates?.isNotEmpty() == true
         tts.setPitch(
             when {
@@ -407,7 +398,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         tts.setSpeechRate(0.92f)
     }
 
-    /** \u064A\u0628\u062F\u0651\u0644 \u0628\u064A\u0646 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u0631\u062C\u0627\u0644\u064A \u0648\u0627\u0644\u0623\u0646\u062B\u0648\u064A \u0641\u0648\u0631\u064A\u0627\u064B\u060C \u064A\u062D\u0641\u0638 \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631\u060C \u0648\u064A\u0623\u0643\u0651\u062F \u0628\u062C\u0645\u0644\u0629 \u0645\u0646\u0637\u0648\u0642\u0629 */
     private fun toggleVoiceGender() {
         isFemaleVoice = !isFemaleVoice
         getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
@@ -419,11 +409,11 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             if (isFemaleVoice) "VOICE: FEMALE" else "VOICE: MALE"
 
         val confirmation = when (currentLangCode) {
-            "ar" -> if (isFemaleVoice) "\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u0623\u0646\u062B\u0648\u064A" else "\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0635\u0648\u062A \u0627\u0644\u0631\u062C\u0627\u0644\u064A"
-            "fr" -> if (isFemaleVoice) "Voix f\u00E9minine activ\u00E9e" else "Voix masculine activ\u00E9e"
+            "ar" -> if (isFemaleVoice) "تم تفعيل الصوت الأنثوي" else "تم تفعيل الصوت الرجالي"
+            "fr" -> if (isFemaleVoice) "Voix féminine activée" else "Voix masculine activée"
             "es" -> if (isFemaleVoice) "Voz femenina activada" else "Voz masculina activada"
-            "ru" -> if (isFemaleVoice) "\u0416\u0435\u043D\u0441\u043A\u0438\u0439 \u0433\u043E\u043B\u043E\u0441 \u0432\u043A\u043B\u044E\u0447\u0451\u043D" else "\u041C\u0443\u0436\u0441\u043A\u043E\u0439 \u0433\u043E\u043B\u043E\u0441 \u0432\u043A\u043B\u044E\u0447\u0451\u043D"
-            "zh" -> if (isFemaleVoice) "\u5DF2\u5207\u6362\u4E3A\u5973\u58F0" else "\u5DF2\u5207\u6362\u4E3A\u7537\u58F0"
+            "ru" -> if (isFemaleVoice) "Женский голос включён" else "Мужской голос включён"
+            "zh" -> if (isFemaleVoice) "已切换为女声" else "已切换为男声"
             else -> if (isFemaleVoice) "Female voice activated" else "Male voice activated"
         }
         respond(confirmation)
@@ -582,7 +572,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         override fun onEndOfSpeech() {}
 
         override fun onError(error: Int) {
-            // \u0625\u0639\u0627\u062F\u0629 \u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062D\u062F\u0648\u062F\u0629 (3 \u0645\u0631\u0627\u062A \u0623\u0642\u0635\u0649) \u0645\u0639 \u062A\u0623\u062E\u064A\u0631 \u062A\u0635\u0627\u0639\u062F\u064A \u0628\u062F\u0644 \u0645\u062D\u0627\u0648\u0644\u0629 \u0641\u0648\u0631\u064A\u0629 \u0642\u062F \u062A\u0647\u0631\u0633 \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629
+            // إعادة محاولة محدودة (3 مرات أقصى) مع تأخير تصاعدي بدل محاولة فورية قد تهرس البطارية
             if (!continuousMode) {
                 if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.READY)
                 return
@@ -595,9 +585,9 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
                 val container = findViewById<View>(R.id.micButton)
                 findViewById<TextView>(R.id.micIcon).text = "\uD83C\uDF99\uFE0F"
                 stopPulseAnimation(container)
-                statusText.text = "\u062C\u0627\u0647\u0632 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639"
+                statusText.text = "جاهز للاستماع"
                 if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.ERROR)
-                log("\u062A\u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 \u0628\u0639\u062F $maxListenRetries \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0641\u0627\u0634\u0644\u0629 (\u0631\u0645\u0632 \u0627\u0644\u062E\u0637\u0623: $error)")
+                log("توقف الاستماع المستمر بعد $maxListenRetries محاولات فاشلة (رمز الخطأ: $error)")
                 retryHandler.postDelayed({
                     if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.READY)
                 }, 2200L)
@@ -1676,6 +1666,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             }
         }
     }
+
     private fun respondNavigation(place: String, mode: String) {
         if (mode == "walking") {
             respond("\u0647\u0627\u0643 \u0637\u0631\u064A\u0642 \u0627\u0644\u0645\u0634\u064A \u0627\u0644\u0649 $place")
@@ -1683,23 +1674,30 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             respond("\u062C\u0627\u0631\u064A \u0641\u062A\u062D \u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u0649 $place")
         }
     }
+
     // ---------------- Jokes ----------------
+
     private val jokes = listOf(
         "\u0648\u0627\u062D\u062F \u0633\u0623\u0644 \u0635\u0627\u062D\u0628\u0648: \u0639\u0644\u0627\u0634 \u0627\u0644\u062F\u064A\u0643 \u064A\u0635\u064A\u062D \u0627\u0644\u0635\u0628\u0627\u062D\u061F \u0642\u0627\u0644\u0647: \u0628\u0627\u0634 \u064A\u0641\u0648\u0642\u0643 \u0642\u0628\u0644 \u0645\u0627 \u062A\u0641\u0648\u062A\u0647 \u0628\u0627\u0644\u0646\u0648\u0645.",
         "\u0637\u0641\u0644 \u0633\u0623\u0644 \u0628\u0627\u0628\u0627\u0647: \u0628\u0627\u0628\u0627 \u0648\u064A\u0646 \u062A\u062D\u0628 \u062A\u0643\u0648\u0646 \u0644\u0645\u0627 \u062A\u0643\u0628\u0631\u061F \u0642\u0627\u0644\u0647: \u0647\u0627\u062F\u064A \u0647\u064A \u0627\u0644\u0645\u0634\u0643\u0644\u0629\u060C \u0623\u0646\u0627 \u0643\u0628\u0631\u062A \u0648\u0645\u0627 \u0632\u0644\u062A \u0645\u0627 \u0639\u0631\u0641\u062A\u0634.",
         "\u0648\u0627\u062D\u062F \u062F\u062E\u0644 \u064A\u0634\u062A\u0631\u064A \u0633\u0627\u0639\u0629\u060C \u0642\u0627\u0644\u0647 \u0627\u0644\u0628\u064A\u0627\u0639: \u0647\u0627\u064A \u0627\u0644\u0633\u0627\u0639\u0629 \u0628\u062A\u0639\u064A\u0634 \u0645\u0639\u0627\u0643 \u0644\u0644\u0623\u0628\u062F. \u0642\u0627\u0644\u0647: \u0637\u064A\u0628 \u0623\u0639\u0637\u064A\u0646\u064A \u0648\u062D\u062F\u0629 \u062A\u0639\u064A\u0634 \u0623\u0633\u0628\u0648\u0639 \u0628\u0633\u060C \u062E\u0627\u064A\u0641 \u0646\u0636\u064A\u0639\u0647\u0627.",
         "\u0639\u0644\u0627\u0634 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0627 \u0628\u064A\u062D\u0633 \u0628\u0627\u0644\u0628\u0631\u062F\u061F \u0644\u0623\u0646\u0647 \u0639\u0646\u062F\u0647 Windows \u0645\u0633\u0643\u0631\u0629 \u0632\u064A\u0646."
     )
+
     // ---------------- Notes ----------------
+
     private fun saveNote(note: String) {
         notesManager.save(note)
     }
+
     private fun readNotes(): String {
         val notes = notesManager.getAll()
         if (notes.isEmpty()) return "\u0645\u0627 \u0639\u0646\u062F\u0643 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629"
         return "\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643: " + notes.joinToString("\u060C ")
     }
+
     // ---------------- Natural response variety ----------------
+
     private val flashOnPhrases = listOf(
         "\u062F\u0627\u064A\u0631\u0644\u0643 \u0627\u0644\u0641\u0644\u0627\u0634", "\u062A\u0645\u0627\u0645\u060C \u0648\u0644\u0651\u0649 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644", "\u0647\u0627\u0643 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644"
     )
@@ -1925,6 +1923,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         }
     }
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
+
     private fun startPerfMonitor() {
         if (!BuildConfig.DEBUG) return
         val monitor = findViewById<TextView>(R.id.perfMonitor)
@@ -1935,10 +1934,12 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         lastFpsTimestamp = 0L
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
+
     private fun stopPerfMonitor() {
         perfMonitorRunning = false
         findViewById<TextView>(R.id.perfMonitor)?.visibility = View.GONE
     }
+
     private fun updatePerfMonitorText(fps: Int) {
         if (!BuildConfig.DEBUG) return
         val runtime = Runtime.getRuntime()
@@ -1951,6 +1952,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             monitor.setTextColor(android.graphics.Color.parseColor("#4A808A"))
         }
     }
+
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
     private fun setupSidebarUi() {
         val sidebarNav = findViewById<View>(R.id.sidebarNav)
@@ -2023,12 +2025,10 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             }
             if (key == "SYS") refreshBatteryDisplay()
         }
-
         navItems.forEach { (key, item) ->
             item.setOnClickListener { switchPanel(key) }
         }
         switchPanel("HOME")
-
         // \u0632\u0631 \u0625\u062E\u0641\u0627\u0621/\u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629
         sidebarToggle.setOnClickListener {
             sidebarVisible = !sidebarVisible
@@ -2086,12 +2086,12 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             backupNotesToCloud()
         }
         findViewById<TextView>(R.id.sysRestoreButton).setOnClickListener {
-            sysStatus.text = "\u062C\u0627\u0631\u064A \u0627\u0644\u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629..."
+            sysStatus.text = "جاري الاسترجاع من السحابة..."
             restoreNotesFromCloud()
         }
         findViewById<TextView>(R.id.sysVoiceGenderButton).setOnClickListener {
             toggleVoiceGender()
-            sysStatus.text = if (isFemaleVoice) "\u0627\u0644\u0635\u0648\u062A: \u0623\u0646\u062B\u0648\u064A" else "\u0627\u0644\u0635\u0648\u062A: \u0631\u062C\u0627\u0644\u064A"
+            sysStatus.text = if (isFemaleVoice) "الصوت: أنثوي" else "الصوت: رجالي"
         }
         // ---- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) ----
         val moreStatus = findViewById<TextView>(R.id.moreStatusText)
@@ -2123,6 +2123,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         findViewById<TextView>(R.id.moreCompassButton).setOnClickListener {
             jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
+
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
@@ -2133,15 +2134,18 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         ) {
             fetchAndShowLocation()
         }
+
         // ---- LAB panel: \u0641\u062A\u062D DESIGN LAB ----
         findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
             startActivity(Intent(this, DesignLabActivity::class.java))
         }
+
         // ---- AI panel: \u0637\u0644\u0628 \u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u062D\u0642\u064A\u0642\u064A\u0629 \u0645\u0646 Gemini ----
         findViewById<TextView>(R.id.aiRefreshButton).setOnClickListener {
             fetchAiSuggestions()
         }
     }
+
     // \u064A\u0641\u062A\u062D \u0645\u0648\u0642\u0639 \u0648\u064A\u0628 \u0641\u064A \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C\u060C \u0648\u064A\u062E\u0641\u064A \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0645\u0624\u0642\u062A\u0627\u064B
     private fun openMiniBrowser(url: String) {
         val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
@@ -2220,7 +2224,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             statusView.text = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0627\u0644\u0645\u0648\u0642\u0639"
         }
     }
-
     private fun showLocationOnUi(location: Location) {
         lastKnownLat = location.latitude
         lastKnownLon = location.longitude
@@ -2233,7 +2236,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             )
         }
     }
-
     // \u0625\u0630\u0627 \u0645\u0627\u0643\u0627\u0646\u0634 \u0639\u0646\u062F \u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u0648\u0642\u0639 \u0645\u062D\u0641\u0648\u0638 \u0645\u0633\u0628\u0642\u0627\u064B (\u0634\u0627\u0626\u0639 \u0641\u064A \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u0627\u0644\u062C\u062F\u064A\u062F\u0629)\u060C \u0646\u0637\u0644\u0628 \u0625\u0634\u0627\u0631\u0629 GPS \u062D\u0642\u064A\u0642\u064A\u0629 \u0648\u0627\u062D\u062F\u0629
     private fun requestFreshLocationUpdate(locationManager: LocationManager) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -2344,6 +2346,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062A\u062D \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A")
         }
     }
+
     private fun openAlarmsList() {
         try {
             startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS))
@@ -2352,6 +2355,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062A\u062D \u0627\u0644\u0645\u0646\u0628\u0647\u0627\u062A")
         }
     }
+
     private fun openApp(packageName: String, appName: String) {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         if (launchIntent != null) {
@@ -2361,6 +2365,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             respond("$appName \u0645\u0634 \u0645\u062B\u0628\u062A \u0639\u0644\u0649 \u062C\u0647\u0627\u0632\u0643")
         }
     }
+
     // ---------------- Call a contact ----------------
     private fun extractNameAfter(cmd: String, marker: String): String {
         val idx = cmd.indexOf(marker)
@@ -2457,12 +2462,10 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             .addHeader("x-goog-api-key", GEMINI_API_KEY)
             .post(body)
             .build()
-
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
             }
-
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val responseText = response.body?.string() ?: ""
@@ -2484,7 +2487,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             }
         })
     }
-
     // ---------------- Holographic-style product design ----------------
     private fun designHologram(description: String) {
         if (description.isBlank()) {
@@ -2578,8 +2580,10 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             rightMargin = 40
         }
         container.addView(closeButton, closeParams)
+
         dialog.setContentView(container)
         dialog.show()
+
         ObjectAnimator.ofFloat(textView, "rotationY", 0f, 360f).apply {
             duration = 6000
             repeatCount = ObjectAnimator.INFINITE
@@ -2592,6 +2596,7 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             start()
         }
     }
+
     // ---------------- Explain any topic (geology, etc.) via Gemini ----------------
     private fun extractExplainTopic(cmd: String): String {
         val marker = when {
@@ -2737,7 +2742,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
             }
         })
     }
-
     private fun calculateDistanceOffline(cityA: String, cityB: String): String {
         val coordA = CityCoordinates.coordinates[cityA]
         val coordB = CityCoordinates.coordinates[cityB]
@@ -2747,7 +2751,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         val distanceKm = haversine(coordA.first, coordA.second, coordB.first, coordB.second)
         return "\u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 $cityA \u0627\u0644\u0649 $cityB \u062D\u0648\u0627\u0644\u064A ${distanceKm.toInt()} \u0643\u0645 (\u062E\u0637 \u0645\u0633\u062A\u0642\u064A\u0645 \u062A\u0642\u0631\u064A\u0628\u064A)"
     }
-
     private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val earthRadiusKm = 6371.0
         val dLat = Math.toRadians(lat2 - lat1)
@@ -2757,7 +2760,6 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return earthRadiusKm * c
     }
-
     // ---------------- Output helpers ----------------
     private fun respond(text: String) {
         log("\u062C\u0627\u0631\u0641\u0633: $text")
@@ -2898,5 +2900,12 @@ if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_O
         tts.shutdown()
         stopMusic()
         speechRecognizer?.destroy()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
+            jarvisGeologyModule.onPhotoCaptured()
+        }
     }
 }
