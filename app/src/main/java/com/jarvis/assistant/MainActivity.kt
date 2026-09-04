@@ -1717,7 +1717,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun toggleDefenseMode(active: Boolean) {
         defenseModeActive = active
         if (::jarvisDial.isInitialized) {
-             jarvisDial.setDefenseMode(active)
+            jarvisDial.setDefenseMode(active)
         }
         if (active) {
             val battery = securityScanner.getBatteryPercent()
@@ -1816,6 +1816,32 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun restoreNotesFromCloud() {
+        if (!cloudSync.isConfigured()) {
+            respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
+            return
+        }
+        respond("\u0646\u062C\u064A\u0628 \u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+        cloudSync.restore("notes") { success, result ->
+            runOnUiThread {
+                if (success && result != null) {
+                    try {
+                        val arr = JSONArray(result)
+                        for (i in 0 until arr.length()) {
+                            notesManager.save(arr.getString(i))
+                        }
+                        respond("\u062A\u0645 \u0627\u0633\u062A\u0631\u062C\u0627\u0639 ${arr.length()} \u0645\u0644\u0627\u062D\u0638\u0629 \u0645\u0646 \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+                    } catch (e: Exception) {
+                        log("\u062E\u0637\u0623 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629: ${e.message}")
+                        respond("\u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629 \u062A\u0627\u0644\u0641\u0629")
+                    }
+                } else {
+                    respond("\u0645\u0627\u0644\u0642\u064A\u062A \u0646\u0633\u062E\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 \u0641\u064A \u0627\u0644\u0633\u062D\u0627\u0628\u0629")
+                }
+            }
+        }
+    }
+
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
 
     private fun startPerfMonitor() {
@@ -1880,7 +1906,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             shape = GradientDrawable.OVAL
             setColor(android.graphics.Color.parseColor("#16232A"))
             setStroke(2, android.graphics.Color.parseColor("#3AA7B8"))
-            }
+        }
 
         val navItems = mapOf(
             "HOME" to findViewById<TextView>(R.id.navHome),
