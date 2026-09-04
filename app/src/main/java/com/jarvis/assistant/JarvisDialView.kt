@@ -96,7 +96,7 @@ class JarvisDialView @JvmOverloads constructor(
     private var hudState = JarvisHudState.READY
     private var hudStateListener: ((JarvisHudState) -> Unit)? = null
 
-    /** \u064A\u0633\u0645\u062D \u0644ـ MainActivity \u0628\u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0644\u062A\u063A\u064A\u0631\u0627\u062A \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0644\u064A \u064A\u062D\u062F\u0651\u062B \u0644\u0648\u062D\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629 (\u0628\u062F\u0648\u0646 \u062A\u0643\u0631\u0627\u0631 \u0627\u0644\u0645\u0646\u0637\u0642)
+    /** يسمح لـ MainActivity بالاستماع لتغيرات الحالة ليحدّث لوحة الحالة الجانبية (بدون تكرار المنطق) */
     fun setHudStateListener(listener: (JarvisHudState) -> Unit) {
         hudStateListener = listener
     }
@@ -285,7 +285,7 @@ class JarvisDialView @JvmOverloads constructor(
     private var wakeBurstStartMs = -1L
     private val wakeBurstDurationMs = 650L
 
-    /** \u064A\u064F\u0637\u0644\u0642 \u0646\u0628\u0636\u0629/\u0627\u0646\u0641\u062C\u0627\u0631 \u062C\u0633\u064A\u0645\u0627\u062A \u0642\u0635\u064A\u0631 \u0639\u0646\u062F \u0627\u0643\u062A\u0634\u0627\u0641 \u0643\u0644\u0645\u0629 \u0627\u0644\u062A\u0641\u0639\u064A\u0644 ("\u062C\u0627\u0631\u0641\u0633"/jarvis...)
+    /** يُطلق نبضة/انفجار جسيمات قصير عند اكتشاف كلمة التفعيل ("جارفس"/jarvis...) */
     fun triggerWakeBurst() {
         wakeBurstStartMs = System.currentTimeMillis()
         invalidate()
