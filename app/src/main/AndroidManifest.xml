@@ -89,6 +89,14 @@
             android:name=".BrowserFullscreenActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ProductScannerActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SuggestionApprovalActivity"
+            android:exported="false" />
+
         <!-- ── مستقبلات ───────────────────────────────────────── -->
         <receiver
             android:name=".ReminderReceiver"
