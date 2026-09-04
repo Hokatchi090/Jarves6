@@ -75,7 +75,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var flashOn = false
     private var continuousMode = false
     private var speechRecognizer: SpeechRecognizer? = null
-    private var currentLangCode = "en"
+    private var currentLangCode = "ar"
     // \u062A\u062A\u0628\u0651\u0639 \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0628\u0639\u062F \u0641\u0634\u0644 \u0627\u0644\u062A\u0639\u0631\u0641 \u0627\u0644\u0635\u0648\u062A\u064A (\u062D\u062F \u0623\u0642\u0635\u0649 3 \u0645\u0639 \u062A\u0623\u062E\u064A\u0631 \u062A\u0635\u0627\u0639\u062F\u064A)
     private var listenRetryCount = 0
     private val maxListenRetries = 3
@@ -403,12 +403,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             when {
                 isFemaleVoice && foundGenderVoice -> 1.15f
                 isFemaleVoice -> 1.25f
-                foundGenderVoice -> 0.68f
-                else -> 0.58f
+                foundGenderVoice -> 0.55f
+                else -> 0.45f
             }
         )
         // صوت رجالي أبطأ وأعمق قليلاً يحس أخشن، والأنثوي يبقى بسرعته الطبيعية
-        tts.setSpeechRate(if (isFemaleVoice) 0.94f else 0.86f)
+        tts.setSpeechRate(if (isFemaleVoice) 0.94f else 0.80f)
     }
 
     private fun toggleVoiceGender() {
@@ -436,7 +436,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (status == TextToSpeech.SUCCESS) {
             isFemaleVoice = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
                 .getBoolean("is_female_voice", false)
-            tts.language = Locale.ENGLISH
+            currentLangCode = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+                .getString("lang_code", "ar") ?: "ar"
+            tts.language = localeForLangCode(currentLangCode)
             tts.setPitch(0.6f)
             tts.setSpeechRate(0.88f)
             applyMaleVoiceForCurrentLanguage()
@@ -1432,6 +1434,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             "EMAIL: " + (if (userEmail.isNotBlank()) userEmail else "--")
         findViewById<TextView>(R.id.profilePhone).text =
             "PHONE: " + (if (userPhone.isNotBlank()) userPhone else "--")
+        val emergencyName = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("emergency_contact_name", "") ?: ""
+        val emergencyPhone = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("emergency_contact_phone", "") ?: ""
+        val emergencyText = when {
+            emergencyName.isNotBlank() && emergencyPhone.isNotBlank() -> "$emergencyName ($emergencyPhone)"
+            emergencyName.isNotBlank() -> emergencyName
+            emergencyPhone.isNotBlank() -> emergencyPhone
+            else -> "--"
+        }
+        findViewById<TextView>(R.id.profileEmergencyContact).text = "EMERGENCY CONTACT: $emergencyText"
     }
 
     private fun showEditProfileDialog() {
@@ -1455,9 +1468,21 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             setText(userPhone)
             inputType = android.text.InputType.TYPE_CLASS_PHONE
         }
+        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        val emergencyNameInput = android.widget.EditText(this).apply {
+            hint = "اسم جهة اتصال الطوارئ"
+            setText(prefs.getString("emergency_contact_name", ""))
+        }
+        val emergencyPhoneInput = android.widget.EditText(this).apply {
+            hint = "هاتف جهة اتصال الطوارئ"
+            setText(prefs.getString("emergency_contact_phone", ""))
+            inputType = android.text.InputType.TYPE_CLASS_PHONE
+        }
         container.addView(nameInput)
         container.addView(emailInput)
         container.addView(phoneInput)
+        container.addView(emergencyNameInput)
+        container.addView(emergencyPhoneInput)
 
         android.app.AlertDialog.Builder(this)
             .setTitle("الملف الشخصي")
@@ -1466,6 +1491,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 saveUserName(nameInput.text.toString().trim())
                 saveUserEmail(emailInput.text.toString().trim())
                 saveUserPhone(phoneInput.text.toString().trim())
+                prefs.edit()
+                    .putString("emergency_contact_name", emergencyNameInput.text.toString().trim())
+                    .putString("emergency_contact_phone", emergencyPhoneInput.text.toString().trim())
+                    .apply()
                 populateProfileCard()
                 respond("تم حفظ الملف الشخصي")
             }
@@ -1641,47 +1670,61 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // ---------------- Language switching ----------------
 
+    private fun localeForLangCode(code: String): Locale = when (code) {
+        "ar" -> Locale("ar")
+        "fr" -> Locale.FRENCH
+        "es" -> Locale("es")
+        "ru" -> Locale("ru")
+        "zh" -> Locale.SIMPLIFIED_CHINESE
+        else -> Locale.ENGLISH
+    }
+
+    private val supportedLangCodes = listOf("ar", "fr", "en", "es", "ru", "zh")
+    private val langDisplayNames = mapOf(
+        "ar" to "ARABIC", "fr" to "FRENCH", "en" to "ENGLISH",
+        "es" to "SPANISH", "ru" to "RUSSIAN", "zh" to "CHINESE"
+    )
+
+    /** يبدّل فعليًا للغة المطلوبة: الاستماع + النطق + الصوت المناسب، ويحفظ الاختيار */
+    private fun switchToLanguage(code: String) {
+        currentLangCode = code
+        tts.language = localeForLangCode(code)
+        applyMaleVoiceForCurrentLanguage()
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+            .putString("lang_code", code).apply()
+        findViewById<TextView>(R.id.sysLangButton)?.text =
+            "LANG: " + (langDisplayNames[code] ?: code.uppercase())
+
+        val confirmation = when (code) {
+            "ar" -> "تمام، رح أسمعك بالعربي هلق، أنا لسا جارفس"
+            "fr" -> "D'accord, je t'écoute en français maintenant, je suis toujours Jarvis"
+            "en" -> "Okay, I'm listening in English now, still Jarvis"
+            "es" -> "Vale, ahora te escucho en español, sigo siendo Jarvis"
+            "ru" -> "Хорошо, теперь я слушаю по-русски, я всё тот же Джарвис"
+            "zh" -> "好的，现在我听中文了，我还是贾维斯"
+            else -> "Okay, language switched"
+        }
+        respond(confirmation)
+    }
+
+    /** يدور لأقرب لغة تالية في القائمة، يُستدعى من زر SYS */
+    private fun cycleLanguage() {
+        val currentIndex = supportedLangCodes.indexOf(currentLangCode).coerceAtLeast(0)
+        val nextCode = supportedLangCodes[(currentIndex + 1) % supportedLangCodes.size]
+        switchToLanguage(nextCode)
+    }
+
     private fun handleLanguageSwitch(cmd: String) {
         when {
-            cmd.contains("\u0639\u0631\u0628\u064A") || cmd.contains("arabic") || cmd.contains("arabe") -> {
-                currentLangCode = "ar"
-                tts.language = Locale("ar")
-                applyMaleVoiceForCurrentLanguage()
-                respond("\u062A\u0645\u0627\u0645\u060C \u0631\u062D \u0623\u0633\u0645\u0639\u0643 \u0628\u0627\u0644\u0639\u0631\u0628\u064A \u0647\u0644\u0642\u060C \u0623\u0646\u0627 \u0644\u0633\u0627 \u062C\u0627\u0631\u0641\u0633")
-            }
-            cmd.contains("\u0641\u0631\u0646\u0633") || cmd.contains("french") || cmd.contains("fran\u00E7ais") -> {
-                currentLangCode = "fr"
-                tts.language = Locale.FRENCH
-                applyMaleVoiceForCurrentLanguage()
-                respond("D'accord, je t'\u00E9coute en fran\u00E7ais maintenant, je suis toujours Jarvis")
-            }
-            cmd.contains("\u0627\u0646\u062C\u0644\u064A\u0632") || cmd.contains("english") || cmd.contains("anglais") -> {
-                currentLangCode = "en"
-                tts.language = Locale.ENGLISH
-                applyMaleVoiceForCurrentLanguage()
-                respond("Okay, I'm listening in English now, still Jarvis")
-            }
-            cmd.contains("\u0627\u0633\u0628\u0627\u0646") || cmd.contains("spanish") || cmd.contains("espa\u00F1ol") -> {
-                currentLangCode = "es"
-                tts.language = Locale("es")
-                applyMaleVoiceForCurrentLanguage()
-                respond("Vale, ahora te escucho en espa\u00F1ol, sigo siendo Jarvis")
-            }
-            cmd.contains("\u0631\u0648\u0633") || cmd.contains("russian") || cmd.contains("\u0440\u0443\u0441\u0441\u043A") -> {
-                currentLangCode = "ru"
-                tts.language = Locale("ru")
-                applyMaleVoiceForCurrentLanguage()
-                respond("\u0425\u043E\u0440\u043E\u0448\u043E, \u0442\u0435\u043F\u0435\u0440\u044C \u044F \u0441\u043B\u0443\u0448\u0430\u044E \u043F\u043E-\u0440\u0443\u0441\u0441\u043A\u0438, \u044F \u0432\u0441\u0451 \u0442\u043E\u0442 \u0436\u0435 \u0414\u0436\u0430\u0440\u0432\u0438\u0441")
-            }
-            cmd.contains("\u0645\u0627\u0646\u062F\u0631\u064A\u0646") || cmd.contains("\u0635\u064A\u0646\u064A") || cmd.contains("mandarin") ||
-                    cmd.contains("chinese") || cmd.contains("\u4E2D\u6587") -> {
-                currentLangCode = "zh"
-                tts.language = Locale.SIMPLIFIED_CHINESE
-                applyMaleVoiceForCurrentLanguage()
-                respond("\u597D\u7684\uFF0C\u73B0\u5728\u6211\u542C\u4E2D\u6587\u4E86\uFF0C\u6211\u8FD8\u662F\u8D3E\u7EF4\u65AF")
-            }
+            cmd.contains("عربي") || cmd.contains("arabic") || cmd.contains("arabe") -> switchToLanguage("ar")
+            cmd.contains("فرنس") || cmd.contains("french") || cmd.contains("français") -> switchToLanguage("fr")
+            cmd.contains("انجليز") || cmd.contains("english") || cmd.contains("anglais") -> switchToLanguage("en")
+            cmd.contains("اسبان") || cmd.contains("spanish") || cmd.contains("español") -> switchToLanguage("es")
+            cmd.contains("روس") || cmd.contains("russian") || cmd.contains("русск") -> switchToLanguage("ru")
+            cmd.contains("ماندرين") || cmd.contains("صيني") || cmd.contains("mandarin") ||
+                    cmd.contains("chinese") || cmd.contains("中文") -> switchToLanguage("zh")
             else -> {
-                respond("\u0642\u0644\u064A \u0639\u0631\u0628\u064A\u060C \u0641\u0631\u0646\u0633\u064A\u060C \u0627\u0646\u062C\u0644\u064A\u0632\u064A\u060C \u0627\u0633\u0628\u0627\u0646\u064A\u060C \u0631\u0648\u0633\u064A\u060C \u0623\u0648 \u0645\u0627\u0646\u062F\u0631\u064A\u0646")
+                respond("قلي عربي، فرنسي، انجليزي، اسباني، روسي، أو ماندرين")
             }
         }
     }
@@ -1738,14 +1781,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u062A\u0637\u0628\u064A\u0642 \u0645\u0646\u0628\u0647 \u0639\u0644\u0649 \u0647\u0627\u062A\u0641\u0643")
         }
     }
-
     // ---------------- Search & navigation ----------------
-
     private fun extractSearchQuery(cmd: String): String {
         val marker = if (cmd.contains("\u0627\u0628\u062D\u062B \u0639\u0646")) "\u0627\u0628\u062D\u062B \u0639\u0646" else "\u062F\u0648\u0631 \u0644\u064A \u0639\u0644\u0649"
         return extractNameAfter(cmd, marker)
     }
-
     private fun searchGoogle(query: String) {
         if (query.isBlank()) {
             respond("\u0642\u0644\u064A \u0634\u0648 \u0628\u062F\u0643 \u0623\u0628\u062D\u062B \u0639\u0646\u0647")
@@ -1799,28 +1839,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u062C\u0627\u0631\u064A \u0641\u062A\u062D \u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u0649 $place")
         }
     }
-
     // ---------------- Jokes ----------------
-
     private val jokes = listOf(
         "\u0648\u0627\u062D\u062F \u0633\u0623\u0644 \u0635\u0627\u062D\u0628\u0648: \u0639\u0644\u0627\u0634 \u0627\u0644\u062F\u064A\u0643 \u064A\u0635\u064A\u062D \u0627\u0644\u0635\u0628\u0627\u062D\u061F \u0642\u0627\u0644\u0647: \u0628\u0627\u0634 \u064A\u0641\u0648\u0642\u0643 \u0642\u0628\u0644 \u0645\u0627 \u062A\u0641\u0648\u062A\u0647 \u0628\u0627\u0644\u0646\u0648\u0645.",
         "\u0637\u0641\u0644 \u0633\u0623\u0644 \u0628\u0627\u0628\u0627\u0647: \u0628\u0627\u0628\u0627 \u0648\u064A\u0646 \u062A\u062D\u0628 \u062A\u0643\u0648\u0646 \u0644\u0645\u0627 \u062A\u0643\u0628\u0631\u061F \u0642\u0627\u0644\u0647: \u0647\u0627\u062F\u064A \u0647\u064A \u0627\u0644\u0645\u0634\u0643\u0644\u0629\u060C \u0623\u0646\u0627 \u0643\u0628\u0631\u062A \u0648\u0645\u0627 \u0632\u0644\u062A \u0645\u0627 \u0639\u0631\u0641\u062A\u0634.",
         "\u0648\u0627\u062D\u062F \u062F\u062E\u0644 \u064A\u0634\u062A\u0631\u064A \u0633\u0627\u0639\u0629\u060C \u0642\u0627\u0644\u0647 \u0627\u0644\u0628\u064A\u0627\u0639: \u0647\u0627\u064A \u0627\u0644\u0633\u0627\u0639\u0629 \u0628\u062A\u0639\u064A\u0634 \u0645\u0639\u0627\u0643 \u0644\u0644\u0623\u0628\u062F. \u0642\u0627\u0644\u0647: \u0637\u064A\u0628 \u0623\u0639\u0637\u064A\u0646\u064A \u0648\u062D\u062F\u0629 \u062A\u0639\u064A\u0634 \u0623\u0633\u0628\u0648\u0639 \u0628\u0633\u060C \u062E\u0627\u064A\u0641 \u0646\u0636\u064A\u0639\u0647\u0627.",
         "\u0639\u0644\u0627\u0634 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0627 \u0628\u064A\u062D\u0633 \u0628\u0627\u0644\u0628\u0631\u062F\u061F \u0644\u0623\u0646\u0647 \u0639\u0646\u062F\u0647 Windows \u0645\u0633\u0643\u0631\u0629 \u0632\u064A\u0646."
     )
-
     // ---------------- Notes ----------------
-
     private fun saveNote(note: String) {
         notesManager.save(note)
     }
-
     private fun readNotes(): String {
         val notes = notesManager.getAll()
         if (notes.isEmpty()) return "\u0645\u0627 \u0639\u0646\u062F\u0643 \u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062D\u0641\u0648\u0638\u0629"
         return "\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u0643: " + notes.joinToString("\u060C ")
     }
-
     // ---------------- Natural response variety ----------------
     private val flashOnPhrases = listOf(
         "\u062F\u0627\u064A\u0631\u0644\u0643 \u0627\u0644\u0641\u0644\u0627\u0634", "\u062A\u0645\u0627\u0645\u060C \u0648\u0644\u0651\u0649 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644", "\u0647\u0627\u0643 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644"
@@ -1889,7 +1923,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         )
     }
-
     // \u064A\u062F\u0648\u0631 \u0639\u0644\u0649 \u062A\u0637\u0628\u064A\u0642 \u0645\u062B\u0628\u062A \u0628\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u0637\u0648\u0642 (\u0645\u0637\u0627\u0628\u0642\u0629 \u062C\u0632\u0626\u064A\u0629) \u0648\u064A\u0641\u062A\u062D\u0647 \u0625\u0630\u0627 \u0644\u0642\u0627\u0647\u060C \u064A\u0631\u062C\u0639 true/false \u0644\u0644\u0645\u0648\u062C\u0651\u0647
     private fun tryLaunchAppByName(spokenName: String): Boolean {
         if (spokenName.isBlank()) return false
@@ -1907,7 +1940,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             false
         }
     }
-
     // ---------------- IR remote control ----------------
     private fun sendIrCommand(action: String) {
         if (!irRemote.hasIrBlaster()) {
@@ -2000,8 +2032,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         )
     }
+
     private fun scanBluetoothDevicesForPanel(statusView: TextView) = scanBluetoothDevices(statusView)
+
     // ---------------- Free cloud backup (Supabase) ----------------
+
     private fun backupNotesToCloud() {
         if (!cloudSync.isConfigured()) {
             respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
@@ -2021,6 +2056,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
+
     private fun restoreNotesFromCloud() {
         if (!cloudSync.isConfigured()) {
             respond("\u0627\u0644\u0633\u062D\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u0636\u0628\u0648\u0637\u0629 \u0628\u0639\u062F")
@@ -2046,7 +2082,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
     private fun startPerfMonitor() {
         if (!BuildConfig.DEBUG) return
@@ -2214,6 +2249,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             toggleVoiceGender()
             sysStatus.text = if (isFemaleVoice) "الصوت: أنثوي" else "الصوت: رجالي"
         }
+        findViewById<TextView>(R.id.sysLangButton).text =
+            "LANG: " + (langDisplayNames[currentLangCode] ?: currentLangCode.uppercase())
+        findViewById<TextView>(R.id.sysLangButton).setOnClickListener {
+            cycleLanguage()
+            sysStatus.text = "اللغة: " + (langDisplayNames[currentLangCode] ?: currentLangCode)
+        }
         // ---- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) ----
         val moreStatus = findViewById<TextView>(R.id.moreStatusText)
         findViewById<TextView>(R.id.moreFakeCallButton).setOnClickListener {
@@ -2244,6 +2285,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.moreCompassButton).setOnClickListener {
             jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
+
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
@@ -2254,6 +2296,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         ) {
             fetchAndShowLocation()
         }
+
         // ---- MAP panel: زر فتح الموقع في تطبيق خرائط خارجي ----
         findViewById<TextView>(R.id.mapOpenExternalButton).setOnClickListener {
             if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
@@ -2268,6 +2311,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             }
         }
+
         // ---- LAB panel: فتح DESIGN LAB ----
         findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
             startActivity(Intent(this, DesignLabActivity::class.java))
@@ -2479,7 +2523,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A")
         }
     }
-
     private fun openSystemSettings() {
         try {
             startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
@@ -2488,7 +2531,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062A\u062D \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A")
         }
     }
-
     private fun openAlarmsList() {
         try {
             startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS))
@@ -2705,6 +2747,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER }
         container.addView(textView, textParams)
+
         val closeButton = Button(this).apply {
             text = "\u2715 \u0625\u063A\u0644\u0627\u0642"
             setTextColor(Color.parseColor("#00F6FF"))
@@ -2720,8 +2763,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             rightMargin = 40
         }
         container.addView(closeButton, closeParams)
+
         dialog.setContentView(container)
         dialog.show()
+
         ObjectAnimator.ofFloat(textView, "rotationY", 0f, 360f).apply {
             duration = 6000
             repeatCount = ObjectAnimator.INFINITE
@@ -2734,6 +2779,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             start()
         }
     }
+
     // ---------------- Explain any topic (geology, etc.) via Gemini ----------------
     private fun extractExplainTopic(cmd: String): String {
         val marker = when {
