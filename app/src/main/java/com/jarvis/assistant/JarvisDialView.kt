@@ -94,6 +94,12 @@ class JarvisDialView @JvmOverloads constructor(
 
     private var listening = false
     private var hudState = JarvisHudState.READY
+    private var hudStateListener: ((JarvisHudState) -> Unit)? = null
+
+    /** \u064A\u0633\u0645\u062D \u0644ـ MainActivity \u0628\u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0644\u062A\u063A\u064A\u0631\u0627\u062A \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0644\u064A \u064A\u062D\u062F\u0651\u062B \u0644\u0648\u062D\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062C\u0627\u0646\u0628\u064A\u0629 (\u0628\u062F\u0648\u0646 \u062A\u0643\u0631\u0627\u0631 \u0627\u0644\u0645\u0646\u0637\u0642)
+    fun setHudStateListener(listener: (JarvisHudState) -> Unit) {
+        hudStateListener = listener
+    }
 
     // \u0644\u0648\u0642\u0641/\u0627\u0633\u062A\u0626\u0646\u0627\u0641 \u062D\u0644\u0642\u0627\u062A HUD \u0627\u0644\u0645\u062A\u062D\u0631\u0643\u0629 (\u064A\u0648\u0641\u0631 \u0627\u0644\u0628\u0637\u0627\u0631\u064A\u0629 \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0641\u064A \u0627\u0644\u062E\u0644\u0641\u064A\u0629)
     private var animationPaused = false
@@ -156,6 +162,7 @@ class JarvisDialView @JvmOverloads constructor(
         speaking = state == JarvisHudState.SPEAKING
         listening = state == JarvisHudState.LISTENING
         invalidate()
+        hudStateListener?.invoke(state)
     }
 
     fun setModuleMenuVisible(visible: Boolean) {
@@ -187,6 +194,35 @@ class JarvisDialView @JvmOverloads constructor(
         super.onDraw(canvas)
         elapsed += 0.016f
 
+        // \u062D\u064A\u0648\u064A\u0629 \u0627\u0644\u0623\u0644\u0648\u0627\u0646: \u0643\u0644 \u062D\u0627\u0644\u0629 (READY/LISTENING/THINKING/SPEAKING/ERROR) \u0644\u0647\u0627 \u0645\u0632\u0627\u062C \u0644\u0648\u0646 \u062E\u0627\u0635\u060C \u0647\u0630\u0627 \u064A\u0639\u0637\u064A \u0627\u0646\u0637\u0628\u0627\u0639\u064B \u0628\u0623\u0646 \u0627\u0644\u0648\u0627\u062C\u0647\u0629 \u062D\u064A\u0629 \u0648\u062A\u062A\u0641\u0627\u0639\u0644 \u0645\u0639 \u0627\u0644\u062D\u0627\u0644\u0629. \u0648\u0636\u0639 \u0627\u0644\u062F\u0641\u0627\u0639 \u064A\u0628\u0642\u0649 \u0644\u0647 \u0627\u0644\u0623\u0648\u0644\u0648\u064A\u0629 \u0627\u0644\u0645\u0637\u0644\u0642\u0629 (\u0623\u062D\u0645\u0631 \u062F\u0627\u0626\u0645\u064B\u0627)
+        if (defenseMode) {
+            cyan = Color.rgb(224, 65, 65)
+            cyanBright = Color.rgb(255, 120, 120)
+        } else {
+            when (hudState) {
+                JarvisHudState.READY -> {
+                    cyan = Color.rgb(65, 224, 244)
+                    cyanBright = Color.rgb(145, 247, 255)
+                }
+                JarvisHudState.LISTENING -> {
+                    cyan = Color.rgb(60, 230, 150)
+                    cyanBright = Color.rgb(150, 255, 200)
+                }
+                JarvisHudState.THINKING -> {
+                    cyan = Color.rgb(255, 180, 60)
+                    cyanBright = Color.rgb(255, 215, 120)
+                }
+                JarvisHudState.SPEAKING -> {
+                    cyan = Color.rgb(80, 225, 255)
+                    cyanBright = Color.rgb(190, 248, 255)
+                }
+                JarvisHudState.ERROR -> {
+                    cyan = Color.rgb(255, 80, 80)
+                    cyanBright = Color.rgb(255, 150, 150)
+                }
+            }
+        }
+
         val cx = width / 2f
         val cy = height / 2f
         val base = minOf(width, height) * 0.31f
@@ -194,10 +230,12 @@ class JarvisDialView @JvmOverloads constructor(
         drawAmbientGlow(canvas, cx, cy, base)
         drawParticles(canvas, cx, cy, base)
         drawOuterHud(canvas, cx, cy, base)
+        drawScanSweep(canvas, cx, cy, base)
         drawMainRings(canvas, cx, cy, base)
         drawRadialTicks(canvas, cx, cy, base)
         drawOrbitElements(canvas, cx, cy, base)
         drawCentralCore(canvas, cx, cy, base)
+        drawWakeBurst(canvas, cx, cy, base)
         drawJarvisText(canvas, cx, cy, base)
         drawStatusLines(canvas, cx, cy, base)
         drawClockModule(canvas, cx, cy, base)
@@ -212,6 +250,74 @@ class JarvisDialView @JvmOverloads constructor(
 
         if (!animationPaused) {
             postInvalidateOnAnimation()
+        }
+    }
+
+    // \u062E\u0637 \u0645\u0627\u0633\u062D \u062F\u0648\u0651\u0627\u0631 \u062D\u0648\u0644 \u0627\u0644\u062D\u0644\u0642\u0629 \u0627\u0644\u062E\u0627\u0631\u062C\u064A\u0629\u060C \u0645\u0633\u062A\u0648\u062D\u0649 \u0645\u0646 \u0634\u0627\u0634\u0627\u062A \u0627\u0644\u0631\u0627\u062F\u0627\u0631/\u0627\u0644\u0645\u0633\u062D \u0627\u0644\u0628\u064A\u0648\u0645\u062A\u0631\u064A. \u064A\u0632\u064A\u062F \u0627\u0644\u062D\u064A\u0648\u064A\u0629 \u0628\u0634\u0643\u0644 \u0645\u0644\u062D\u0648\u0638 \u0628\u0644\u0627 \u062B\u0642\u0644 \u0623\u062F\u0627\u0621
+    private fun drawScanSweep(canvas: Canvas, cx: Float, cy: Float, base: Float) {
+        val radius = base * 1.52f
+        val speed = when (hudState) {
+            JarvisHudState.THINKING -> 220f
+            JarvisHudState.LISTENING -> 140f
+            else -> 60f
+        }
+        val sweepAngle = (elapsed * speed) % 360f
+        val trailLength = when (hudState) {
+            JarvisHudState.THINKING -> 46f
+            JarvisHudState.LISTENING -> 30f
+            else -> 16f
+        }
+
+        outerHudRect.set(cx - radius, cy - radius, cx + radius, cy + radius)
+
+        // \u0630\u064A\u0644 \u0645\u062A\u0644\u0627\u0634\u064D \u062E\u0644\u0641 \u0627\u0644\u0631\u0623\u0633 (\u064A\u0639\u0637\u064A \u0625\u062D\u0633\u0627\u0633 \u062D\u0631\u0643\u0629)
+        var i = 0
+        while (i < 5) {
+            val fraction = i / 5f
+            tickPaint.color = cyanBright
+            tickPaint.alpha = ((1f - fraction) * (if (listening || hudState == JarvisHudState.THINKING) 150 else 60)).toInt()
+            tickPaint.strokeWidth = 2.4f - fraction * 1.6f
+            canvas.drawArc(outerHudRect, sweepAngle - fraction * trailLength, 3f, false, tickPaint)
+            i++
+        }
+    }
+
+    private var wakeBurstStartMs = -1L
+    private val wakeBurstDurationMs = 650L
+
+    /** \u064A\u064F\u0637\u0644\u0642 \u0646\u0628\u0636\u0629/\u0627\u0646\u0641\u062C\u0627\u0631 \u062C\u0633\u064A\u0645\u0627\u062A \u0642\u0635\u064A\u0631 \u0639\u0646\u062F \u0627\u0643\u062A\u0634\u0627\u0641 \u0643\u0644\u0645\u0629 \u0627\u0644\u062A\u0641\u0639\u064A\u0644 ("\u062C\u0627\u0631\u0641\u0633"/jarvis...)
+    fun triggerWakeBurst() {
+        wakeBurstStartMs = System.currentTimeMillis()
+        invalidate()
+    }
+
+    private fun drawWakeBurst(canvas: Canvas, cx: Float, cy: Float, base: Float) {
+        if (wakeBurstStartMs < 0) return
+        val t = (System.currentTimeMillis() - wakeBurstStartMs).toFloat() / wakeBurstDurationMs
+        if (t >= 1f) {
+            wakeBurstStartMs = -1L
+            return
+        }
+        val eased = 1f - (1f - t) * (1f - t)
+        val alpha = ((1f - t) * 200).toInt()
+
+        ringPaint.color = cyanBright
+        ringPaint.alpha = alpha
+        ringPaint.strokeWidth = 3f * (1f - t) + 1f
+        canvas.drawCircle(cx, cy, base * (0.4f + eased * 1.6f), ringPaint)
+
+        ringPaint.alpha = (alpha * 0.6f).toInt()
+        canvas.drawCircle(cx, cy, base * (0.25f + eased * 1.2f), ringPaint)
+
+        val count = 10
+        for (i in 0 until count) {
+            val angle = Math.toRadians((i * (360f / count) + t * 60f).toDouble())
+            val dist = base * (0.5f + eased * 1.3f)
+            val px = cx + cos(angle).toFloat() * dist
+            val py = cy + sin(angle).toFloat() * dist * 0.72f
+            particlePaint.color = cyanBright
+            particlePaint.alpha = alpha
+            canvas.drawCircle(px, py, 3.5f * (1f - t) + 1f, particlePaint)
         }
     }
 
