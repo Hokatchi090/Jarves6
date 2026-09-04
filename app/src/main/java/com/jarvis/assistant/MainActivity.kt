@@ -271,6 +271,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         ) {
             enableContinuousMode(startImmediately = false)
         }
+
+        // زر الاستماع الصريح: يشتغل في أي وقت — يقاطع كلام جارفس فورًا لو كان يتكلم، ثم يبدأ الاستماع فورًا
+        findViewById<View>(R.id.listenButton).setOnClickListener {
+            if (::tts.isInitialized && tts.isSpeaking) {
+                tts.stop()
+            }
+            retryHandler.postDelayed({
+                statusText.text = "جاري الاستماع..."
+                findViewById<TextView>(R.id.micIcon).text = "\u23FA\uFE0F"
+                startListening()
+            }, 120L)
+        }
     }
 
     private fun toggleContinuousMode() {
@@ -391,11 +403,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             when {
                 isFemaleVoice && foundGenderVoice -> 1.15f
                 isFemaleVoice -> 1.25f
-                foundGenderVoice -> 0.85f
-                else -> 0.75f
+                foundGenderVoice -> 0.68f
+                else -> 0.58f
             }
         )
-        tts.setSpeechRate(0.92f)
+        // صوت رجالي أبطأ وأعمق قليلاً يحس أخشن، والأنثوي يبقى بسرعته الطبيعية
+        tts.setSpeechRate(if (isFemaleVoice) 0.94f else 0.86f)
     }
 
     private fun toggleVoiceGender() {
@@ -444,7 +457,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         if (::jarvisDial.isInitialized) {
                             jarvisDial.setHudState(JarvisHudState.READY)
                         }
-                        if (continuousMode && !lectureMode) startListening()
+                        // تأخير قصير قبل إعادة تشغيل الاستماع: يمنع خطأ "المحرك مشغول" (ERROR_RECOGNIZER_BUSY)
+                        // الذي يحصل غالبًا عند استدعاء startListening() فورًا بعد ما TTS يخلص الكلام مباشرة
+                        if (continuousMode && !lectureMode) {
+                            retryHandler.postDelayed({ if (continuousMode) startListening() }, 450L)
+                        }
                     }
                 }
                 @Deprecated("Deprecated in Java")
@@ -453,7 +470,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         if (::jarvisDial.isInitialized) {
                             jarvisDial.setHudState(JarvisHudState.READY)
                         }
-                        if (continuousMode && !lectureMode) startListening()
+                        if (continuousMode && !lectureMode) {
+                            retryHandler.postDelayed({ if (continuousMode) startListening() }, 450L)
+                        }
                     }
                 }
             })
@@ -1404,6 +1423,114 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .putString("user_phone", phone).apply()
     }
 
+    // ---------------- بطاقة الملف الشخصي (صفحة AI) ----------------
+
+    private fun populateProfileCard() {
+        findViewById<TextView>(R.id.profileName).text =
+            "NAME: " + (if (userName.isNotBlank()) userName else "--")
+        findViewById<TextView>(R.id.profileEmail).text =
+            "EMAIL: " + (if (userEmail.isNotBlank()) userEmail else "--")
+        findViewById<TextView>(R.id.profilePhone).text =
+            "PHONE: " + (if (userPhone.isNotBlank()) userPhone else "--")
+    }
+
+    private fun showEditProfileDialog() {
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val nameInput = android.widget.EditText(this).apply {
+            hint = "الاسم"
+            setText(userName)
+        }
+        val emailInput = android.widget.EditText(this).apply {
+            hint = "البريد الإلكتروني"
+            setText(userEmail)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        }
+        val phoneInput = android.widget.EditText(this).apply {
+            hint = "رقم الهاتف"
+            setText(userPhone)
+            inputType = android.text.InputType.TYPE_CLASS_PHONE
+        }
+        container.addView(nameInput)
+        container.addView(emailInput)
+        container.addView(phoneInput)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("الملف الشخصي")
+            .setView(container)
+            .setPositiveButton("حفظ") { _, _ ->
+                saveUserName(nameInput.text.toString().trim())
+                saveUserEmail(emailInput.text.toString().trim())
+                saveUserPhone(phoneInput.text.toString().trim())
+                populateProfileCard()
+                respond("تم حفظ الملف الشخصي")
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    // ---------------- حالة الشبكة الحقيقية (صفحة NET) ----------------
+
+    private fun refreshNetworkStatus() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = cm.activeNetwork
+        val caps = network?.let { cm.getNetworkCapabilities(it) }
+
+        val connectionType = when {
+            caps == null -> "غير متصل"
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "WI-FI"
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "بيانات الجوال"
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> "ETHERNET"
+            else -> "متصل"
+        }
+        findViewById<TextView>(R.id.netConnectionType).text = "CONNECTION: $connectionType"
+
+        val ip = try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            var found = "--"
+            for (intf in interfaces) {
+                for (addr in intf.inetAddresses) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        found = addr.hostAddress ?: "--"
+                    }
+                }
+            }
+            found
+        } catch (e: Exception) {
+            "--"
+        }
+        findViewById<TextView>(R.id.netIpAddress).text = "IP: $ip"
+
+        val wifiText = if (connectionType == "WI-FI") {
+            try {
+                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                val ssid = wm.connectionInfo?.ssid?.replace("\"", "") ?: "--"
+                "WIFI: $ssid"
+            } catch (e: Exception) {
+                "WIFI: --"
+            }
+        } else {
+            "WIFI: غير متصل"
+        }
+        findViewById<TextView>(R.id.netWifiName).text = wifiText
+
+        val btText = try {
+            val btAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+            when {
+                btAdapter == null -> "BLUETOOTH: غير مدعوم"
+                btAdapter.isEnabled -> "BLUETOOTH: مفعّل"
+                else -> "BLUETOOTH: مطفأ"
+            }
+        } catch (e: Exception) {
+            "BLUETOOTH: --"
+        }
+        findViewById<TextView>(R.id.netBluetoothStatus).text = btText
+    }
+
     // ---------------- SMS: reading, explaining, sending ----------------
 
     // \u064A\u062F\u0648\u0631 \u0639\u0644\u0649 \u062C\u0647\u0627\u062A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0639\u0646 \u0627\u0633\u0645 \u0648\u064A\u0631\u062C\u0639 \u0627\u0644\u0631\u0642\u0645\u060C \u0623\u0648 null \u0625\u0630\u0627 \u0645\u0627\u0644\u0642\u0627\u0634
@@ -1642,7 +1769,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     private fun navigateTo(place: String, mode: String = "driving") {
         if (place.isBlank()) {
             respond("\u0642\u0644\u064A \u0648\u064A\u0646 \u0628\u062F\u0643 \u062A\u0631\u0648\u062D")
@@ -1666,7 +1792,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-
     private fun respondNavigation(place: String, mode: String) {
         if (mode == "walking") {
             respond("\u0647\u0627\u0643 \u0637\u0631\u064A\u0642 \u0627\u0644\u0645\u0634\u064A \u0627\u0644\u0649 $place")
@@ -1697,7 +1822,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     // ---------------- Natural response variety ----------------
-
     private val flashOnPhrases = listOf(
         "\u062F\u0627\u064A\u0631\u0644\u0643 \u0627\u0644\u0641\u0644\u0627\u0634", "\u062A\u0645\u0627\u0645\u060C \u0648\u0644\u0651\u0649 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644", "\u0647\u0627\u0643 \u0627\u0644\u0641\u0644\u0627\u0634 \u0634\u0627\u0639\u0644"
     )
@@ -1922,8 +2046,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
     }
-    // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
 
+    // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
     private fun startPerfMonitor() {
         if (!BuildConfig.DEBUG) return
         val monitor = findViewById<TextView>(R.id.perfMonitor)
@@ -1934,12 +2058,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         lastFpsTimestamp = 0L
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
-
     private fun stopPerfMonitor() {
         perfMonitorRunning = false
         findViewById<TextView>(R.id.perfMonitor)?.visibility = View.GONE
     }
-
     private fun updatePerfMonitorText(fps: Int) {
         if (!BuildConfig.DEBUG) return
         val runtime = Runtime.getRuntime()
@@ -1952,7 +2074,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             monitor.setTextColor(android.graphics.Color.parseColor("#4A808A"))
         }
     }
-
     // ---------------- Sidebar navigation (HOME/MAP/LAB/SYS/NET/AI) ----------------
     private fun setupSidebarUi() {
         val sidebarNav = findViewById<View>(R.id.sidebarNav)
@@ -2123,7 +2244,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.moreCompassButton).setOnClickListener {
             jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
-
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
@@ -2134,18 +2254,39 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         ) {
             fetchAndShowLocation()
         }
-
-        // ---- LAB panel: \u0641\u062A\u062D DESIGN LAB ----
+        // ---- MAP panel: زر فتح الموقع في تطبيق خرائط خارجي ----
+        findViewById<TextView>(R.id.mapOpenExternalButton).setOnClickListener {
+            if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
+                respond("ماكانش موقع محفوظ حاليًا")
+            } else {
+                val geoUri = Uri.parse("geo:$lastKnownLat,$lastKnownLon?q=$lastKnownLat,$lastKnownLon")
+                val mapIntent = Intent(Intent.ACTION_VIEW, geoUri)
+                if (mapIntent.resolveActivity(packageManager) != null) {
+                    startActivity(mapIntent)
+                } else {
+                    respond("ما لقيتش تطبيق خرائط مثبت")
+                }
+            }
+        }
+        // ---- LAB panel: فتح DESIGN LAB ----
         findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
             startActivity(Intent(this, DesignLabActivity::class.java))
         }
-
-        // ---- AI panel: \u0637\u0644\u0628 \u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u062D\u0642\u064A\u0642\u064A\u0629 \u0645\u0646 Gemini ----
+        // ---- AI panel: طلب اقتراحات حقيقية من Gemini ----
         findViewById<TextView>(R.id.aiRefreshButton).setOnClickListener {
             fetchAiSuggestions()
         }
+        // ---- AI panel: بطاقة الملف الشخصي ----
+        populateProfileCard()
+        findViewById<TextView>(R.id.profileEditButton).setOnClickListener {
+            showEditProfileDialog()
+        }
+        // ---- NET panel: معلومات الشبكة الحقيقية للجهاز ----
+        refreshNetworkStatus()
+        findViewById<TextView>(R.id.netRefreshButton).setOnClickListener {
+            refreshNetworkStatus()
+        }
     }
-
     // \u064A\u0641\u062A\u062D \u0645\u0648\u0642\u0639 \u0648\u064A\u0628 \u0641\u064A \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C\u060C \u0648\u064A\u062E\u0641\u064A \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0645\u0624\u0642\u062A\u0627\u064B
     private fun openMiniBrowser(url: String) {
         val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
@@ -2338,6 +2479,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A")
         }
     }
+
     private fun openSystemSettings() {
         try {
             startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
@@ -2355,7 +2497,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062A\u062D \u0627\u0644\u0645\u0646\u0628\u0647\u0627\u062A")
         }
     }
-
     private fun openApp(packageName: String, appName: String) {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         if (launchIntent != null) {
@@ -2365,7 +2506,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("$appName \u0645\u0634 \u0645\u062B\u0628\u062A \u0639\u0644\u0649 \u062C\u0647\u0627\u0632\u0643")
         }
     }
-
     // ---------------- Call a contact ----------------
     private fun extractNameAfter(cmd: String, marker: String): String {
         val idx = cmd.indexOf(marker)
@@ -2580,10 +2720,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             rightMargin = 40
         }
         container.addView(closeButton, closeParams)
-
         dialog.setContentView(container)
         dialog.show()
-
         ObjectAnimator.ofFloat(textView, "rotationY", 0f, 360f).apply {
             duration = 6000
             repeatCount = ObjectAnimator.INFINITE
@@ -2596,7 +2734,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             start()
         }
     }
-
     // ---------------- Explain any topic (geology, etc.) via Gemini ----------------
     private fun extractExplainTopic(cmd: String): String {
         val marker = when {
