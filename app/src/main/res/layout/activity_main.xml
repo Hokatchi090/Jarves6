@@ -176,7 +176,7 @@
     <!-- Live status/log panel (mustawa7 min alHUD al-marja3i: dot + label + ticker) -->
     <LinearLayout
         android:id="@+id/hudStatusPanel"
-        android:layout_width="170dp"
+        android:layout_width="188dp"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
         android:layout_marginTop="50dp"
@@ -234,7 +234,7 @@
         android:id="@+id/contentArea"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginStart="64dp"
+        android:layout_marginStart="72dp"
         android:layout_marginTop="44dp">
 
         <!-- HOME panel: the existing Jarvis dial -->
@@ -264,6 +264,22 @@
             </FrameLayout>
 
             <!-- \u062E\u0631\u064A\u0637\u0629 \u0645\u0635\u063A\u0631\u0629 \u062F\u0627\u0626\u0631\u064A\u0629 \u062A\u062F\u0648\u0631 \u0628\u0623\u0633\u0644\u0648\u0628 \u0628\u0644\u0648\u0628\u0631\u0646\u062A\u060C \u062A\u0648\u0631\u064A \u0645\u0648\u0642\u0639\u0643 \u0627\u0644\u062D\u0642\u064A\u0642\u064A \u062A\u062D\u062A \u0627\u0644\u0640 HUD -->
+            <!-- زر استماع صريح: يعمل في أي وقت، حتى أثناء كلام جارفس (يقاطعه ويبدأ الاستماع فورًا) -->
+            <TextView
+                android:id="@+id/listenButton"
+                android:layout_width="58dp"
+                android:layout_height="58dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="130dp"
+                android:gravity="center"
+                android:text="&#127897;&#65039;"
+                android:textSize="24sp"
+                android:background="@drawable/listen_button_bg"
+                android:elevation="4dp"
+                android:clickable="true"
+                android:focusable="true" />
+
             <WebView
                 android:id="@+id/miniMapView"
                 android:layout_width="match_parent"
@@ -305,38 +321,61 @@
                 android:fontFamily="monospace"
                 android:letterSpacing="0.1" />
 
-            <TextView
-                android:id="@+id/mapLat"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="LAT: --"
-                android:textColor="#D7FBFF"
-                android:textSize="15sp"
-                android:fontFamily="monospace" />
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:id="@+id/mapLat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="LAT: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="15sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/mapLon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="LON: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="15sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/mapStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="TAP TO REQUEST LOCATION"
+                    android:textColor="#5C7A82"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/mapLon"
-                android:layout_width="wrap_content"
+                android:id="@+id/mapOpenExternalButton"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="LON: --"
-                android:textColor="#D7FBFF"
-                android:textSize="15sp"
-                android:fontFamily="monospace" />
-
-            <TextView
-                android:id="@+id/mapStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="TAP TO REQUEST LOCATION"
-                android:textColor="#5C7A82"
+                android:layout_marginTop="12dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="OPEN IN MAPS"
+                android:textColor="#8DEFFF"
                 android:textSize="10sp"
                 android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:background="@drawable/hud_glow_card"
                 android:clickable="true"
-                android:focusable="true"
-                />
+                android:focusable="true" />
         </LinearLayout>
 
         <!-- LAB panel: hologram design feature + saved designs -->
@@ -432,7 +471,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -447,7 +486,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -461,7 +500,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
@@ -483,7 +522,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -498,7 +537,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -512,7 +551,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
@@ -534,7 +573,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -549,7 +588,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -563,7 +602,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
@@ -584,7 +623,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="10sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
@@ -606,29 +645,81 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:gravity="center"
             android:padding="18dp"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:text="NET"
+                android:text="NETWORK STATUS"
                 android:textColor="#76E8F5"
-                android:textSize="13sp"
-                android:fontFamily="monospace" />
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:id="@+id/netConnectionType"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CONNECTION: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/netIpAddress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="IP: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/netWifiName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="WIFI: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/netBluetoothStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="BLUETOOTH: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
 
             <TextView
-                android:layout_width="wrap_content"
+                android:id="@+id/netRefreshButton"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:layout_gravity="center_horizontal"
-                android:text="\u063A\u064A\u0631 \u0645\u062A\u0648\u0641\u0631: \u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u0623\u062C\u0647\u0632\u0629 \u062A\u062D\u062A\u0627\u062C \u0633\u064A\u0631\u0641\u0631 \u062E\u0627\u0631\u062C\u064A \u0645\u0627 \u0639\u0646\u062F\u0646\u0627\u0634"
-                android:textColor="#5C7A82"
+                android:layout_marginTop="12dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="REFRESH"
+                android:textColor="#8DEFFF"
                 android:textSize="10sp"
                 android:fontFamily="monospace"
-                android:gravity="center" />
+                android:letterSpacing="0.08"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
         </LinearLayout>
 
         <!-- AI panel: Gemini-backed suggestions -->
@@ -643,6 +734,67 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="OPERATOR PROFILE"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:id="@+id/profileName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="NAME: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profileEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="EMAIL: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profilePhone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="PHONE: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profileEditButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="EDIT PROFILE"
+                    android:textColor="#8DEFFF"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.06"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
                 android:text="AI SUGGESTIONS"
                 android:textColor="#76E8F5"
                 android:textSize="11sp"
@@ -651,13 +803,17 @@
 
             <TextView
                 android:id="@+id/aiRefreshButton"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
+                android:padding="12dp"
+                android:gravity="center"
                 android:text="TAP TO GENERATE"
-                android:textColor="#5C7A82"
+                android:textColor="#8DEFFF"
                 android:textSize="10sp"
                 android:fontFamily="monospace"
+                android:letterSpacing="0.06"
+                android:background="@drawable/hud_glow_card"
                 android:clickable="true"
                 android:focusable="true" />
 
@@ -665,7 +821,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:layout_marginTop="16dp">
+                android:layout_marginTop="12dp">
 
                 <TextView
                     android:id="@+id/aiSuggestionsText"
@@ -675,7 +831,9 @@
                     android:textColor="#8AA0A8"
                     android:textSize="11sp"
                     android:fontFamily="monospace"
-                    android:lineSpacingExtra="8dp" />
+                    android:lineSpacingExtra="8dp"
+                    android:padding="12dp"
+                    android:background="@drawable/hud_glow_card" />
             </ScrollView>
         </LinearLayout>
 
@@ -711,7 +869,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="11sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -725,7 +883,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="11sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -746,7 +904,7 @@
                         android:textColor="#A7EAF2"
                         android:textSize="10sp"
                         android:fontFamily="monospace"
-                        android:background="#142A30"
+                        android:background="@drawable/hud_glow_card"
                         android:clickable="true"
                         android:focusable="true" />
 
@@ -760,7 +918,7 @@
                         android:textColor="#A7EAF2"
                         android:textSize="10sp"
                         android:fontFamily="monospace"
-                        android:background="#142A30"
+                        android:background="@drawable/hud_glow_card"
                         android:clickable="true"
                         android:focusable="true" />
                 </LinearLayout>
@@ -775,7 +933,7 @@
                     android:textColor="#A7EAF2"
                     android:textSize="11sp"
                     android:fontFamily="monospace"
-                    android:background="#142A30"
+                    android:background="@drawable/hud_glow_card"
                     android:clickable="true"
                     android:focusable="true" />
 
@@ -806,7 +964,7 @@
                         android:textColor="#A7EAF2"
                         android:textSize="10sp"
                         android:fontFamily="monospace"
-                        android:background="#142A30"
+                        android:background="@drawable/hud_glow_card"
                         android:clickable="true"
                         android:focusable="true" />
 
@@ -821,7 +979,7 @@
                         android:textColor="#A7EAF2"
                         android:textSize="10sp"
                         android:fontFamily="monospace"
-                        android:background="#142A30"
+                        android:background="@drawable/hud_glow_card"
                         android:clickable="true"
                         android:focusable="true" />
 
@@ -835,7 +993,7 @@
                         android:textColor="#A7EAF2"
                         android:textSize="10sp"
                         android:fontFamily="monospace"
-                        android:background="#142A30"
+                        android:background="@drawable/hud_glow_card"
                         android:clickable="true"
                         android:focusable="true" />
                 </LinearLayout>
@@ -876,7 +1034,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
-        android:layout_marginTop="50dp"
+        android:layout_marginTop="128dp"
         android:layout_marginEnd="8dp"
         android:text="FPS: -- | MEM: -- MB"
         android:textColor="#4A808A"
