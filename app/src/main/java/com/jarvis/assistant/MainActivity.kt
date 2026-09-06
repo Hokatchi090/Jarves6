@@ -3918,6 +3918,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A\u0634 \u0646\u062C\u064A\u0628 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u062F\u0627\u0628\u0627") }
             }
+        }
+  })
+}
+
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val json = JSONObject(response.body?.string() ?: "")
