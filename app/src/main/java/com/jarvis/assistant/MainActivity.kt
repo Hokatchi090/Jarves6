@@ -206,7 +206,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // خادم احتياطي اختياري: يُستعمل فقط لو مفتاح Gemini فارغ أو فشل الاتصال به.
     // حطّ هنا رابط أي API ترجع رد نصي (نص خام، أو JSON فيه حقل "reply"/"response"/"text").
-    private val ONLINE_CHAT_ENDPOINT = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
+    private val ONLINE_CHAT_ENDPOINT = ""
     private val geminiClient by lazy { GeminiClient(GEMINI_API_KEY) }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Google Maps: \u0646\u0641\u0633 \u0627\u0644\u0645\u0628\u062F\u0623\u060C \u064A\u062C\u064A \u0645\u0646 BuildConfig ----
@@ -1147,6 +1147,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
             cmd.contains("\u0627\u0644\u0639\u064A\u0646 \u0627\u0644\u062A\u062E\u064A\u0644\u064A\u0629") || cmd.contains("\u0623\u0633\u0644\u0648\u0628 \u0641\u0646\u064A") || cmd.contains("imaginary eye") -> {
                 startActivity(Intent(this, ImaginaryEyeActivity::class.java))
+            }
+            cmd.contains("\u0627\u0633\u062A\u0646\u0633\u0627\u062E") || cmd.contains("\u0645\u0633\u062D \u0627\u0644\u0634\u064A\u0621 \u0645\u0646 \u0643\u0644 \u0627\u0644\u0632\u0648\u0627\u064A\u0627") || cmd.contains("3d scan") -> {
+                startActivity(Intent(this, MultiAngleCaptureActivity::class.java))
             }
             cmd.contains("\u062F\u0648\u0631 \u0641\u064A \u0645\u0644\u0627\u062D\u0638\u0627\u062A\u064A") || cmd.contains("\u0628\u062D\u062B \u0641\u064A \u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A") -> {
                 respond(searchScannedNotes(cmd))
@@ -2524,6 +2527,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         miniMapView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         miniMapView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         miniMapView.addJavascriptInterface(MapBridgeInterface(), "MapBridge")
+        miniMapView.webViewClient = OfflineTileCacheWebViewClient()
         miniMapView.loadUrl("file:///android_asset/mini_map.html")
 
         // ---- \u062A\u0647\u064A\u0626\u0629 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C (\u0645\u062E\u0641\u064A \u0644\u0648\u062F \u0627\u0644\u0641\u062A\u062D) ----
@@ -2737,6 +2741,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
         }
 
+        // ---- MAP panel: تبديل عرض ثلاثي الأبعاد (ميل بصري بلوبرنت، وليس تضاريس حقيقية) ----
+        findViewById<TextView>(R.id.map3dToggleButton).setOnClickListener {
+            toggleMap3dView()
+        }
+
+        // ---- MAP panel: حفظ اللقطة الحالية + إدارة خرائط محفوظة متعددة ----
+        findViewById<TextView>(R.id.mapSaveOfflineButton).setOnClickListener {
+            saveCurrentMapSnapshot()
+        }
+        findViewById<TextView>(R.id.addMapButton).setOnClickListener {
+            showAddMapDialog()
+        }
+        renderSavedMapsList()
+
         // ---- LAB panel: فتح DESIGN LAB ----
         findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
             startActivity(Intent(this, DesignLabActivity::class.java))
@@ -2871,6 +2889,132 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     /** يحوّل الإحداثيات لاسم حي/بلدية/ولاية حقيقي، على Thread منفصل لأن Geocoder قد يستغرق وقتًا */
+    // ---------------- عرض 3D بصري (بلوبرنت) + خرائط محفوظة متعددة ----------------
+
+    private var map3dEnabled = false
+
+    /** ميل بصري ثلاثي الأبعاد للخريطة (CSS transform)، وليس تضاريس/ارتفاعات حقيقية */
+    private fun toggleMap3dView() {
+        map3dEnabled = !map3dEnabled
+        findViewById<TextView>(R.id.map3dToggleButton).text =
+            if (map3dEnabled) "3D VIEW: ON" else "3D VIEW: OFF"
+
+        val js = if (map3dEnabled) {
+            "document.body.style.transform='perspective(700px) rotateX(48deg) scale(1.15)';" +
+                    "document.body.style.transformOrigin='center center';"
+        } else {
+            "document.body.style.transform='none';"
+        }
+        if (::miniMapView.isInitialized) {
+            miniMapView.evaluateJavascript(js, null)
+        }
+    }
+
+    data class SavedMap(val name: String, val lat: Double, val lon: Double)
+
+    private fun loadSavedMaps(): MutableList<SavedMap> {
+        val raw = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("saved_maps_json", "[]") ?: "[]"
+        val list = mutableListOf<SavedMap>()
+        try {
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(SavedMap(obj.getString("name"), obj.getDouble("lat"), obj.getDouble("lon")))
+            }
+        } catch (e: Exception) { }
+        return list
+    }
+
+    private fun saveSavedMaps(list: List<SavedMap>) {
+        val arr = JSONArray()
+        list.forEach {
+            val obj = JSONObject()
+            obj.put("name", it.name)
+            obj.put("lat", it.lat)
+            obj.put("lon", it.lon)
+            arr.put(obj)
+        }
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+            .putString("saved_maps_json", arr.toString())
+            .apply()
+    }
+
+    /** الخريطة هنا رسم بلوبرنت محلي (وليست صور شوارع حقيقية)، فهي أصلًا تشتغل بدون إنترنت.
+     * "حفظ اللقطة" هنا يعني: حفظ هذه الإحداثيات كنقطة محفوظة تقدر ترجعلها في أي وقت، حتى بدون GPS جديد */
+    private fun saveCurrentMapSnapshot() {
+        if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
+            respond("ماكانش موقع حالي باش نحفظه")
+            return
+        }
+        val input = android.widget.EditText(this).apply { hint = "اسم هذه الخريطة (مثلاً: الحي)" }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("حفظ اللقطة الحالية")
+            .setView(input)
+            .setPositiveButton("حفظ") { _, _ ->
+                val name = input.text.toString().trim().ifBlank { "خريطة محفوظة" }
+                val current = loadSavedMaps()
+                current.add(SavedMap(name, lastKnownLat, lastKnownLon))
+                saveSavedMaps(current)
+                renderSavedMapsList()
+                respond("تم حفظ الخريطة، تقدر ترجعلها في أي وقت حتى بدون إنترنت")
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    private fun showAddMapDialog() = saveCurrentMapSnapshot()
+
+    private fun renderSavedMapsList() {
+        val container = findViewById<android.widget.LinearLayout>(R.id.savedMapsContainer)
+        container.removeAllViews()
+        val maps = loadSavedMaps()
+        val density = resources.displayMetrics.density
+
+        maps.forEachIndexed { index, savedMap ->
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (8 * density).toInt() }
+                setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
+                setBackgroundResource(R.drawable.hud_glow_card)
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            val label = TextView(this).apply {
+                text = "🗺️ ${savedMap.name}"
+                setTextColor(android.graphics.Color.parseColor("#D7FBFF"))
+                textSize = 11f
+                typeface = Typeface.MONOSPACE
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                )
+            }
+            val deleteBtn = TextView(this).apply {
+                text = "✕"
+                setTextColor(android.graphics.Color.parseColor("#FF5050"))
+                textSize = 13f
+                setPadding((10 * density).toInt(), 0, 0, 0)
+                setOnClickListener {
+                    val current = loadSavedMaps().toMutableList()
+                    current.removeAt(index)
+                    saveSavedMaps(current)
+                    renderSavedMapsList()
+                }
+            }
+            row.setOnClickListener {
+                if (::miniMapView.isInitialized) {
+                    miniMapView.evaluateJavascript("setCoords(${savedMap.lat}, ${savedMap.lon});", null)
+                }
+                respond("انتقلت لخريطة ${savedMap.name}")
+            }
+            row.addView(label)
+            row.addView(deleteBtn)
+            container.addView(row)
+        }
+    }
+
     private fun reverseGeocodeAndDisplay(lat: Double, lon: Double) {
         Thread {
             try {
