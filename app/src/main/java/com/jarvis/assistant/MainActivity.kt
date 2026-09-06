@@ -3930,14 +3930,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     runOnUiThread {
                         respond("\u0648\u0642\u062A \u0627\u0644\u0631\u062D\u0644\u0629 \u0627\u0644\u0639\u0627\u062F\u064A $normalDuration\u060C \u0645\u0639 \u0627\u0644\u0632\u062D\u0645\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u062D\u0648\u0627\u0644\u064A $trafficDuration")
                     }
-                } 
-                
-                catch (e: Exception) {
+                }catch (e: Exception) {
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A\u0634 \u0646\u062C\u064A\u0628 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u062F\u0627\u0628\u0627") }
                 }
             }
         })
-    }
+     }
 
     // ---------------- Fun facts ----------------
 
