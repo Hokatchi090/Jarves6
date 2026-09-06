@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/angleCapturePreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#CC0F1A1F">
+
+        <TextView
+            android:id="@+id/angleCaptureLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="الزاوية 1/8: الأمام"
+            android:textColor="#D7FBFF"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:gravity="center" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/angleCaptureFilterBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#CC0F1A1F">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="66dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/angleCaptureThumbStrip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/angleCaptureButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:gravity="center"
+                android:text="CAPTURE"
+                android:textColor="#8DEFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/angleCaptureFinishButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="FINISH"
+                android:textColor="#8DEFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
