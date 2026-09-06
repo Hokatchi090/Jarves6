@@ -2128,8 +2128,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0628\u062F\u064A \u0625\u0630\u0646 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0639\u062F\u0645 \u0627\u0644\u0625\u0632\u0639\u0627\u062C \u0623\u0648\u0644 \u0645\u0646 \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0647\u0627\u062A\u0641")
         }
     }
-
-    // ---------------- Alarm ----------------
+    
+// ---------------- Alarm ----------------
 
     private fun handleSetAlarm(cmd: String) {
         val regex = Regex("""(\d{1,2})(?:[:\u0648]\s*(\d{1,2}))?""")
@@ -2527,7 +2527,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         miniMapView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         miniMapView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         miniMapView.addJavascriptInterface(MapBridgeInterface(), "MapBridge")
-        miniMapView.webViewClient = OfflineTileCacheWebViewClient()
         miniMapView.loadUrl("file:///android_asset/mini_map.html")
 
         // ---- \u062A\u0647\u064A\u0626\u0629 \u0627\u0644\u0645\u062A\u0635\u0641\u062D \u0627\u0644\u0635\u063A\u064A\u0631 \u0627\u0644\u0645\u062F\u0645\u062C (\u0645\u062E\u0641\u064A \u0644\u0648\u062F \u0627\u0644\u0641\u062A\u062D) ----
@@ -2726,7 +2725,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             fetchAndShowLocation()
         }
 
-        // ---- MAP panel: زر فتح الموقع في تطبيق خرائط خارجي ----
+    // ---- MAP panel: زر فتح الموقع في تطبيق خرائط خارجي ----
         findViewById<TextView>(R.id.mapOpenExternalButton).setOnClickListener {
             if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
                 respond("ماكانش موقع محفوظ حاليًا")
