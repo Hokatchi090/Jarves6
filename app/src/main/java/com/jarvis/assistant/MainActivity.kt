@@ -203,6 +203,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // ---- \u0645\u0641\u062A\u0627\u062D Gemini: \u064A\u062C\u064A \u0645\u0646 BuildConfig (\u0645\u0635\u062F\u0631\u0647 local.properties \u0623\u0648 GitHub Secrets) ----
     // \u0644\u0627 \u062A\u062D\u0637 \u0627\u0644\u0645\u0641\u062A\u0627\u062D \u0647\u0646\u0627 \u0623\u0628\u062F\u0627\u064B. \u0634\u0648\u0641 \u0645\u0644\u0641 local.properties.example
     private val GEMINI_API_KEY = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
+
+    // خادم احتياطي اختياري: يُستعمل فقط لو مفتاح Gemini فارغ أو فشل الاتصال به.
+    // حطّ هنا رابط أي API ترجع رد نصي (نص خام، أو JSON فيه حقل "reply"/"response"/"text").
+    private val ONLINE_CHAT_ENDPOINT = ""
     private val geminiClient by lazy { GeminiClient(GEMINI_API_KEY) }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Google Maps: \u0646\u0641\u0633 \u0627\u0644\u0645\u0628\u062F\u0623\u060C \u064A\u062C\u064A \u0645\u0646 BuildConfig ----
@@ -1386,7 +1390,48 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             askGemini(cmd)
             return "\u0628\u0641\u0643\u0631..."
         }
+        if (ONLINE_CHAT_ENDPOINT.isNotBlank()) {
+            askOnlineChatEndpoint(cmd)
+            return "\u0628\u0641\u0643\u0631..."
+        }
         return "\u0645\u0627 \u0641\u0647\u0645\u062A\u0634"
+    }
+
+    /** خادم احتياطي بسيط: يُستدعى فقط لو Gemini غير مفعّل أو فشل. يقبل رد نصي خام أو JSON بسيط */
+    private fun askOnlineChatEndpoint(message: String) {
+        if (ONLINE_CHAT_ENDPOINT.isBlank()) {
+            respond("\u0645\u0627 \u0641\u0647\u0645\u062A\u0634")
+            return
+        }
+        val jsonBody = JSONObject().apply { put("message", message) }
+        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url(ONLINE_CHAT_ENDPOINT)
+            .addHeader("Content-Type", "application/json")
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u062E\u0627\u062F\u0645 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A") }
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val raw = response.body?.string() ?: ""
+                val replyText = try {
+                    val json = JSONObject(raw)
+                    json.optString("reply").ifBlank {
+                        json.optString("response").ifBlank {
+                            json.optString("text").ifBlank { raw }
+                        }
+                    }
+                } catch (e: Exception) {
+                    raw
+                }
+                runOnUiThread {
+                    respond(replyText.ifBlank { "\u0645\u0627 \u0631\u062C\u0639 \u0627\u0644\u062E\u0627\u062F\u0645 \u0623\u064A \u0631\u062F" })
+                }
+            }
+        })
     }
 
     private fun offlineRules(cmd: String): String? {
@@ -1453,7 +1498,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
+                if (ONLINE_CHAT_ENDPOINT.isNotBlank()) {
+                    askOnlineChatEndpoint(message)
+                } else {
+                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
+                }
             }
 
             override fun onResponse(call: Call, response: Response) {
@@ -1461,6 +1510,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     val responseText = response.body?.string() ?: ""
                     val json = JSONObject(responseText)
                     if (json.has("error")) {
+                        if (ONLINE_CHAT_ENDPOINT.isNotBlank()) {
+                            askOnlineChatEndpoint(message)
+                            return
+                        }
                         val errMsg = json.getJSONObject("error").optString("message", "\u062E\u0637\u0623 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641")
                         runOnUiThread { respond("\u0635\u0627\u0631 \u062E\u0637\u0623 \u0645\u0646 Gemini: $errMsg") }
                         return
@@ -1688,7 +1741,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             obj.put("timestamp", timestamp)
             obj.put("text", finalText)
             arr.put(obj)
-           prefs.edit().putString("voice_notes_json", arr.toString()).apply()
+            prefs.edit().putString("voice_notes_json", arr.toString()).apply()
             refreshExecutiveDashboard()
 
             val numberNote = if (extractedNumber != null) " (لاحظت رقم $extractedNumber فيها، لا تنساه)" else ""
@@ -3895,7 +3948,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0647\u0627\u0644\u0627 \u062E\u0627\u0635\u064A\u0629 \u062A\u062D\u062A\u0627\u062C \u0645\u0641\u062A\u0627\u062D Google Maps API (\u0645\u062C\u0627\u0646\u064A \u062D\u062A\u0649 \u062D\u062F \u0645\u0639\u064A\u0651\u0646 \u0634\u0647\u0631\u064A\u064B\u0627)\u060C \u062F\u0648\u0646\u0647 \u0646\u0642\u062F\u0631 \u0646\u0639\u0637\u064A\u0643 \u0641\u0642\u0637 \u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0627\u0644\u062A\u0642\u0631\u064A\u0628\u064A\u0629")
             return
         }
-        // \u0646\u0633\u062A\u0639\u0645\u0644 \u0623\u0642\u0631\u0628 \u0648\u062C\u0647\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 (\u0627\u0644\u0645\u0646\u0632\u0644/\u0627\u0644\u0639\u0645\u0644/\u0627\u0644\u062C\u0627\u0645\u0639\u0629) \u062D\u0633\u0628 \u0645\u0627 \u0630\u064F\u0643\u0631 \u0641\u064A \u0627\u0644\u0623\u0645\u0631\u060C \u0648\u0625\u0644\u0627 \u0646\u0637\u0644\u0628 \u0627\u0644\u0645\u0646\u0632\u0644 \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u064B\u0627\n        val prefsKey = when {
+        // \u0646\u0633\u062A\u0639\u0645\u0644 \u0623\u0642\u0631\u0628 \u0648\u062C\u0647\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 (\u0627\u0644\u0645\u0646\u0632\u0644/\u0627\u0644\u0639\u0645\u0644/\u0627\u0644\u062C\u0627\u0645\u0639\u0629) \u062D\u0633\u0628 \u0645\u0627 \u0630\u064F\u0643\u0631 \u0641\u064A \u0627\u0644\u0623\u0645\u0631\u060C \u0648\u0625\u0644\u0627 \u0646\u0637\u0644\u0628 \u0627\u0644\u0645\u0646\u0632\u0644 \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u064B\u0627
+        val prefsKey = when {
             cmd.contains("\u0627\u0644\u062C\u0627\u0645\u0639\u0629") -> "waypoint_university"
             cmd.contains("\u0627\u0644\u0639\u0645\u0644") -> "waypoint_work"
             else -> "waypoint_home"
@@ -3918,7 +3972,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A\u0634 \u0646\u062C\u064A\u0628 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u062F\u0627\u0628\u0627") }
             }
-
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val json = JSONObject(response.body?.string() ?: "")
@@ -3930,12 +3983,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     runOnUiThread {
                         respond("\u0648\u0642\u062A \u0627\u0644\u0631\u062D\u0644\u0629 \u0627\u0644\u0639\u0627\u062F\u064A $normalDuration\u060C \u0645\u0639 \u0627\u0644\u0632\u062D\u0645\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u062D\u0648\u0627\u0644\u064A $trafficDuration")
                     }
-                }catch (e: Exception) {
+                } catch (e: Exception) {
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A\u0634 \u0646\u062C\u064A\u0628 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u062F\u0627\u0628\u0627") }
                 }
             }
         })
-     }
+    }
 
     // ---------------- Fun facts ----------------
 
