@@ -303,79 +303,208 @@
                 android:background="@android:color/transparent" />
         </FrameLayout>
 
-        <!-- MAP panel: real device location -->
+        <!-- MAP panel: navigation mode (location + reverse geocode + waypoints) -->
         <LinearLayout
             android:id="@+id/mapPanel"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:padding="18dp"
             android:visibility="gone">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="LOCATION DATA"
-                android:textColor="#76E8F5"
-                android:textSize="11sp"
-                android:fontFamily="monospace"
-                android:letterSpacing="0.1" />
-
-            <LinearLayout
+            <ScrollView
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="@drawable/hud_glow_card">
+                android:layout_height="match_parent"
+                android:scrollbars="none">
 
-                <TextView
-                    android:id="@+id/mapLat"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="LAT: --"
-                    android:textColor="#D7FBFF"
-                    android:textSize="15sp"
-                    android:fontFamily="monospace" />
+                    android:orientation="vertical"
+                    android:padding="18dp">
 
-                <TextView
-                    android:id="@+id/mapLon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="LON: --"
-                    android:textColor="#D7FBFF"
-                    android:textSize="15sp"
-                    android:fontFamily="monospace" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="LOCATION DATA"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
 
-                <TextView
-                    android:id="@+id/mapStatus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="TAP TO REQUEST LOCATION"
-                    android:textColor="#5C7A82"
-                    android:textSize="10sp"
-                    android:fontFamily="monospace"
-                    android:clickable="true"
-                    android:focusable="true" />
-            </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:background="@drawable/hud_glow_card">
 
-            <TextView
-                android:id="@+id/mapOpenExternalButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:padding="14dp"
-                android:gravity="center"
-                android:text="OPEN IN MAPS"
-                android:textColor="#8DEFFF"
-                android:textSize="10sp"
-                android:fontFamily="monospace"
-                android:letterSpacing="0.08"
-                android:background="@drawable/hud_glow_card"
-                android:clickable="true"
-                android:focusable="true" />
+                        <TextView
+                            android:id="@+id/mapLat"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="LAT: --"
+                            android:textColor="#D7FBFF"
+                            android:textSize="15sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapLon"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="LON: --"
+                            android:textColor="#D7FBFF"
+                            android:textSize="15sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapNeighborhood"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="الحي: --"
+                            android:textColor="#A7EAF2"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapCity"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="البلدية: --"
+                            android:textColor="#A7EAF2"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapProvince"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="الولاية / البلد: --"
+                            android:textColor="#A7EAF2"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="TAP TO REQUEST LOCATION"
+                            android:textColor="#5C7A82"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:clickable="true"
+                            android:focusable="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/mapOpenExternalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:padding="14dp"
+                        android:gravity="center"
+                        android:text="OPEN IN MAPS"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.08"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <!-- وضع الملاحة: وجهات سريعة (منزل / عمل / جامعة) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="22dp"
+                        android:text="NAVIGATION"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <TextView
+                        android:id="@+id/navHomeRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:padding="14dp"
+                        android:text="🏠 المنزل: غير محدد (اضغط للتحديد)"
+                        android:textColor="#D7FBFF"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/navWorkRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:text="💼 العمل: غير محدد (اضغط للتحديد)"
+                        android:textColor="#D7FBFF"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/navUniversityRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:text="🎓 الجامعة: غير محدد (اضغط للتحديد)"
+                        android:textColor="#D7FBFF"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <!-- نقاط مخصصة يضيفها المستخدم يدويًا (Waypoints) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:text="WAYPOINTS"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:id="@+id/waypointsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:id="@+id/addWaypointButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:gravity="center"
+                        android:text="+ ADD WAYPOINT (الموقع الحالي)"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+            </ScrollView>
         </LinearLayout>
 
         <!-- LAB panel: hologram design feature + saved designs -->
@@ -644,6 +773,114 @@
             </LinearLayout>
 
             <TextView
+                android:id="@+id/sysBackgroundListenButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="BACKGROUND LISTENING: OFF"
+                android:textColor="#A7EAF2"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.05"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- ملعب صوت الرجالي: 3 أشرطة تحكم حية (عمق / خشونة / بحة) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="VOICE TUNING (MALE)"
+                    android:textColor="#76E8F5"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.08" />
+
+                <TextView
+                    android:id="@+id/sysDepthLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="العمق (DEPTH): 40"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <SeekBar
+                    android:id="@+id/sysDepthSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="26dp"
+                    android:max="100"
+                    android:progress="40"
+                    android:progressDrawable="@drawable/voice_slider_track"
+                    android:thumb="@drawable/voice_slider_thumb" />
+
+                <TextView
+                    android:id="@+id/sysRoughnessLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="الخشونة (ROUGHNESS): 45"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <SeekBar
+                    android:id="@+id/sysRoughnessSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="26dp"
+                    android:max="100"
+                    android:progress="45"
+                    android:progressDrawable="@drawable/voice_slider_track"
+                    android:thumb="@drawable/voice_slider_thumb" />
+
+                <TextView
+                    android:id="@+id/sysRaspLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="البحة (RASP): 0"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <SeekBar
+                    android:id="@+id/sysRaspSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="26dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/voice_slider_track"
+                    android:thumb="@drawable/voice_slider_thumb" />
+
+                <TextView
+                    android:id="@+id/sysVoicePreviewButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:padding="10dp"
+                    android:gravity="center"
+                    android:text="PREVIEW VOICE"
+                    android:textColor="#8DEFFF"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.06"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <TextView
                 android:id="@+id/sysStatusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -815,6 +1052,103 @@
                     android:clickable="true"
                     android:focusable="true" />
             </LinearLayout>
+
+            <!-- لوحة القيادة التنفيذية: ملخص فوري لأداء اليوم -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="EXECUTIVE DASHBOARD"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/dashboardMood"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="😐"
+                        android:textSize="28sp"
+                        android:layout_marginEnd="12dp" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/dashboardDeadline"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="أقرب موعد: --"
+                            android:textColor="#D7FBFF"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/dashboardStudy"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="جلسات تركيز اليوم: 0"
+                            android:textColor="#D7FBFF"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/dashboardProductivity"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="الإنتاجية: 0%"
+                            android:textColor="#D7FBFF"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- كاتب الملاحظات الصوتي الفوري: زر واحد، تكلم، يُحفظ وينظَّم تلقائيًا -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="VOICE NOTES"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/voiceNoteButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="16dp"
+                android:gravity="center"
+                android:text="🎙️ اضغط وتكلم لتسجيل ملاحظة"
+                android:textColor="#8DEFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
 
             <TextView
                 android:layout_width="wrap_content"
