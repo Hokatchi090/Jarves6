@@ -32,6 +32,8 @@ class ImaginaryEyeActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
 
     private var styleHelper: StyleTransferHelper? = null
+    private var currentFilter = CameraFilter.NORMAL
+    private var lastStyledBitmap: Bitmap? = null
 
     companion object {
         private const val CAMERA_PERMISSION_REQUEST = 3003
@@ -58,6 +60,7 @@ class ImaginaryEyeActivity : AppCompatActivity() {
         }
 
         captureButton.setOnClickListener { captureAndStylize() }
+        buildFilterBar()
 
         if (hasCameraPermission()) {
             startCamera()
@@ -97,6 +100,31 @@ class ImaginaryEyeActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    private fun buildFilterBar() {
+        val filterBar = findViewById<android.widget.LinearLayout>(R.id.eyeFilterBar)
+        val density = resources.displayMetrics.density
+        CameraFilter.values().forEach { filter ->
+            val chip = TextView(this).apply {
+                text = filter.label
+                setTextColor(android.graphics.Color.parseColor("#8DEFFF"))
+                textSize = 10f
+                setPadding((14 * density).toInt(), (8 * density).toInt(), (14 * density).toInt(), (8 * density).toInt())
+                setBackgroundResource(R.drawable.hud_glow_card)
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { marginEnd = (8 * density).toInt() }
+                setOnClickListener {
+                    currentFilter = filter
+                    lastStyledBitmap?.let { base ->
+                        resultImage.setImageBitmap(CameraFilter.apply(base, currentFilter))
+                    }
+                }
+            }
+            filterBar.addView(chip)
+        }
+    }
+
     private fun captureAndStylize() {
         val bitmap = previewView.bitmap
         val helper = styleHelper
@@ -116,7 +144,8 @@ class ImaginaryEyeActivity : AppCompatActivity() {
                 }
             }
             if (styled != null) {
-                resultImage.setImageBitmap(styled)
+                lastStyledBitmap = styled
+                resultImage.setImageBitmap(CameraFilter.apply(styled, currentFilter))
                 resultImage.visibility = android.view.View.VISIBLE
                 statusText.text = "\u062A\u0645! \u0647\u0630\u0627 \u0627\u0644\u0639\u0627\u0644\u0645 \u0628\u0623\u0633\u0644\u0648\u0628 \u0641\u0646\u064A"
             } else {
