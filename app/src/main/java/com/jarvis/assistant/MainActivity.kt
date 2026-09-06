@@ -206,7 +206,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // خادم احتياطي اختياري: يُستعمل فقط لو مفتاح Gemini فارغ أو فشل الاتصال به.
     // حطّ هنا رابط أي API ترجع رد نصي (نص خام، أو JSON فيه حقل "reply"/"response"/"text").
-    private val ONLINE_CHAT_ENDPOINT = ""
+    private val ONLINE_CHAT_ENDPOINT = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
     private val geminiClient by lazy { GeminiClient(GEMINI_API_KEY) }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Google Maps: \u0646\u0641\u0633 \u0627\u0644\u0645\u0628\u062F\u0623\u060C \u064A\u062C\u064A \u0645\u0646 BuildConfig ----
