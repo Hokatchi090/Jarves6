@@ -417,6 +417,78 @@
                         android:clickable="true"
                         android:focusable="true" />
 
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/map3dToggleButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="6dp"
+                            android:padding="14dp"
+                            android:gravity="center"
+                            android:text="3D VIEW: OFF"
+                            android:textColor="#8DEFFF"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:background="@drawable/hud_glow_card"
+                            android:clickable="true"
+                            android:focusable="true" />
+
+                        <TextView
+                            android:id="@+id/mapSaveOfflineButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="14dp"
+                            android:gravity="center"
+                            android:text="SAVE VIEW"
+                            android:textColor="#8DEFFF"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:background="@drawable/hud_glow_card"
+                            android:clickable="true"
+                            android:focusable="true" />
+                    </LinearLayout>
+
+                    <!-- خرائط محفوظة متعددة: كل وحدة نقطة يمكن التنقل إليها فورًا -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="SAVED MAPS"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:id="@+id/savedMapsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:id="@+id/addMapButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:gravity="center"
+                        android:text="+ ADD MAP (الموقع الحالي)"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
                     <!-- وضع الملاحة: وجهات سريعة (منزل / عمل / جامعة) -->
                     <TextView
                         android:layout_width="wrap_content"
