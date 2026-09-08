@@ -229,6 +229,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         statusText = findViewById(R.id.statusText)
         logText = findViewById(R.id.logText)
         setupHudStatusPanel()
+        setupReportPanel()
+        setupTextChat()
         setupNavigationPresets()
         setupAddWaypointButton()
         renderWaypointsList()
@@ -319,6 +321,77 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // ---------------- HUD status panel (لوحة الحالة + السجل الحي) ----------------
 
+    // ---------------- نافذة عرض التقرير المركزية (للمعلومات الكبيرة/المفصّلة) ----------------
+
+    private var currentReportText: String = ""
+
+    private fun showReportPanel(title: String, body: String) {
+        currentReportText = body
+        findViewById<TextView>(R.id.reportPanelTitle).text = title
+        findViewById<TextView>(R.id.reportPanelBody).text = body
+        findViewById<View>(R.id.reportPanelOverlay).visibility = View.VISIBLE
+    }
+
+    private fun hideReportPanel() {
+        findViewById<View>(R.id.reportPanelOverlay).visibility = View.GONE
+    }
+
+    private fun setupReportPanel() {
+        findViewById<TextView>(R.id.reportPanelCloseButton).setOnClickListener {
+            hideReportPanel()
+        }
+        findViewById<TextView>(R.id.reportPanelSaveButton).setOnClickListener {
+            val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            val raw = prefs.getString("scanned_notes_json", "[]") ?: "[]"
+            val arr = try { JSONArray(raw) } catch (e: Exception) { JSONArray() }
+            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                .format(java.util.Date())
+            val obj = JSONObject()
+            obj.put("timestamp", timestamp)
+            obj.put("text", "[${findViewById<TextView>(R.id.reportPanelTitle).text}]\n$currentReportText")
+            arr.put(obj)
+            prefs.edit().putString("scanned_notes_json", arr.toString()).apply()
+            hideReportPanel()
+            respond("تم حفظ التقرير في ملاحظاتك")
+        }
+    }
+
+    /** يُستدعى بدل respond() العادية لما يكون الرد طويل/مفصّل (تقرير)، يفتح النافذة تلقائيًا
+     * ويترك ردًا صوتيًا قصيرًا فقط، بدل ما يقرأ كل النص الطويل بصوته */
+    private fun respondWithAutoTriage(fullText: String, panelTitle: String = "JARVIS RESPONSE") {
+        val wordCount = fullText.trim().split(Regex("""\s+""")).size
+        if (wordCount > 55) {
+            showReportPanel(panelTitle, fullText)
+            respond("جاوبتك بتفصيل أكثر، شوف الشاشة")
+        } else {
+            respond(fullText)
+        }
+    }
+
+    // ---------------- الشات الجانبي النصي (بديل الصوت عند فشل التعرف) ----------------
+
+    private fun setupTextChat() {
+        val input = findViewById<android.widget.EditText>(R.id.textChatInput)
+        val sendButton = findViewById<TextView>(R.id.textChatSendButton)
+
+        fun sendTypedMessage() {
+            val text = input.text.toString().trim()
+            if (text.isBlank()) return
+            input.setText("")
+            handleCommand(text)
+        }
+
+        sendButton.setOnClickListener { sendTypedMessage() }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                sendTypedMessage()
+                true
+            } else {
+                false
+            }
+        }
+    }
+
     private fun setupHudStatusPanel() {
         hudStatusDot = findViewById(R.id.hudStatusDot)
         hudStatusLabel = findViewById(R.id.hudStatusLabel)
@@ -393,6 +466,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // حالة جنس الصوت الحالية: false = رجالي (افتراضي)، true = أنثوي. تُحفظ بين جلسات التشغيل
     private var isFemaleVoice: Boolean = false
     private var noteCaptureMode = false
+    private lateinit var halalWallet: HalalWalletManager
     private var maleDepth = 40
     private var maleRoughness = 45
     private var maleRasp = 0
@@ -735,7 +809,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         override fun onError(error: Int) {
             if (noteCaptureMode) {
                 noteCaptureMode = false
-                findViewById<TextView>(R.id.voiceNoteButton).text = "🎙️ اضغط وتكلم لتسجيل ملاحظة"
+                findViewById<TextView>(R.id.voiceNoteButton).text = "VOICE NOTE: TAP TO RECORD"
                 if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.READY)
                 return
             }
@@ -1536,7 +1610,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         conversationHistory.removeAt(0)
                     }
 
-                    runOnUiThread { respond(cleanReply) }
+                    runOnUiThread { respondWithAutoTriage(cleanReply) }
                 } catch (e: Exception) {
                     log("\u062E\u0637\u0623 Gemini: ${e.message}")
                     runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u0647\u0645 \u0631\u062F Gemini") }
@@ -1717,13 +1791,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             return
         }
         noteCaptureMode = true
-        findViewById<TextView>(R.id.voiceNoteButton).text = "🎙️ يستمع... تكلم دابا"
+        findViewById<TextView>(R.id.voiceNoteButton).text = "VOICE NOTE: LISTENING..."
         if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.LISTENING)
         startListening()
     }
 
     private fun saveVoiceNote(rawText: String) {
-        findViewById<TextView>(R.id.voiceNoteButton).text = "🎙️ اضغط وتكلم لتسجيل ملاحظة"
+        findViewById<TextView>(R.id.voiceNoteButton).text = "VOICE NOTE: TAP TO RECORD"
         if (rawText.isBlank()) {
             respond("ما سمعتش حتى كلمة، حاول مرة أخرى")
             return
@@ -1775,16 +1849,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         val deadline = nearestUpcomingEventText() ?: "ماكاين شي موعد قريب مسجّل"
         val productivity = (sessionsToday * 25).coerceAtMost(100)
-        val mood = when {
-            productivity >= 75 -> "😊"
-            productivity >= 25 -> "😐"
-            else -> "😔"
+        val (moodLabel, moodColor) = when {
+            productivity >= 75 -> "OPTIMAL" to "#3CE696"
+            productivity >= 25 -> "NOMINAL" to "#FFB43C"
+            else -> "IDLE" to "#5C7A82"
         }
 
         findViewById<TextView>(R.id.dashboardDeadline)?.text = "أقرب موعد: $deadline"
         findViewById<TextView>(R.id.dashboardStudy)?.text = "جلسات تركيز اليوم: $sessionsToday"
         findViewById<TextView>(R.id.dashboardProductivity)?.text = "الإنتاجية: $productivity%"
-        findViewById<TextView>(R.id.dashboardMood)?.text = mood
+        findViewById<TextView>(R.id.dashboardMood)?.text = moodLabel
+        findViewById<TextView>(R.id.dashboardMood)?.setTextColor(android.graphics.Color.parseColor(moodColor))
     }
 
     private fun recordCompletedPomodoroSession() {
@@ -2128,8 +2203,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             respond("\u0628\u062F\u064A \u0625\u0630\u0646 \u0627\u0644\u0648\u0635\u0648\u0644 \u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0639\u062F\u0645 \u0627\u0644\u0625\u0632\u0639\u0627\u062C \u0623\u0648\u0644 \u0645\u0646 \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0647\u0627\u062A\u0641")
         }
     }
-    
-// ---------------- Alarm ----------------
+
+    // ---------------- Alarm ----------------
 
     private fun handleSetAlarm(cmd: String) {
         val regex = Regex("""(\d{1,2})(?:[:\u0648]\s*(\d{1,2}))?""")
@@ -2714,6 +2789,75 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
 
+        // ---- MORE panel: أزرار الميزات الإضافية (بدون الحاجة للصوت) ----
+        findViewById<TextView>(R.id.moreNoteScannerButton).setOnClickListener {
+            startActivity(Intent(this, NoteScannerActivity::class.java))
+        }
+        findViewById<TextView>(R.id.moreImaginaryEyeButton).setOnClickListener {
+            startActivity(Intent(this, ImaginaryEyeActivity::class.java))
+        }
+        findViewById<TextView>(R.id.more3dScanButton).setOnClickListener {
+            startActivity(Intent(this, MultiAngleCaptureActivity::class.java))
+        }
+        findViewById<TextView>(R.id.moreMorningBriefingButton).setOnClickListener {
+            respond("جاري تجهيز ملخصك الصباحي...")
+            generateMorningBriefing()
+        }
+        findViewById<TextView>(R.id.morePomodoroStartButton).setOnClickListener {
+            startPomodoroFocus()
+        }
+        findViewById<TextView>(R.id.morePomodoroStopButton).setOnClickListener {
+            handlePomodoroCommand("أوقف")
+        }
+        findViewById<TextView>(R.id.moreDailyQuestionButton).setOnClickListener {
+            respond(getDailyQuestion())
+        }
+        findViewById<TextView>(R.id.moreJokeButton).setOnClickListener {
+            if (GEMINI_API_KEY.isBlank()) {
+                respond(funFacts.random())
+            } else {
+                respond("ثانية...")
+                askGemini("احكيلي نكتة قصيرة ومضحكة باللهجة الجزائرية، بدون أي مقدمة زيادة")
+            }
+        }
+        findViewById<TextView>(R.id.moreMoodCheckButton).setOnClickListener {
+            if (GEMINI_API_KEY.isBlank() || conversationHistory.isEmpty()) {
+                respond("مازلت ما عندي معلومات كافية باش نقيّم حالتك، احكيلي عليّا شوي")
+            } else {
+                respond("خليني نشوف...")
+                val recentText = conversationHistory.takeLast(6).joinToString(" ") { it.second }
+                askGemini(
+                    "بناء على هذا النص من المحادثة الأخيرة: \"$recentText\", خمّن بلطف وبجملة واحدة فقط الحالة المزاجية المحتملة للمستخدم وقدم كلمة تشجيعية قصيرة، بدون ما تدعي أنك طبيب نفسي"
+                )
+            }
+        }
+        findViewById<TextView>(R.id.moreTrafficButton).setOnClickListener {
+            handleTrafficInsightCommand("المنزل")
+        }
+        findViewById<TextView>(R.id.moreDrivingModeButton).setOnClickListener {
+            toggleDrivingMode(!drivingModeOn)
+            findViewById<TextView>(R.id.moreDrivingModeButton).text =
+                if (drivingModeOn) "DRIVING MODE: ON" else "DRIVING MODE: OFF"
+        }
+        findViewById<TextView>(R.id.moreAddClassButton).setOnClickListener {
+            showAddClassDialog()
+        }
+        findViewById<TextView>(R.id.moreAddEventButton).setOnClickListener {
+            showAddEventDialog()
+        }
+
+        // ---- MORE panel: المحفظة الحلال ----
+        halalWallet = HalalWalletManager(
+            this, getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        ) { msg -> respond(msg) }
+        findViewById<TextView>(R.id.walletAddExpenseButton).setOnClickListener {
+            halalWallet.showAddEntryDialog(isExpense = true)
+        }
+        findViewById<TextView>(R.id.walletAddIncomeButton).setOnClickListener {
+            halalWallet.showAddEntryDialog(isExpense = false)
+        }
+        halalWallet.refreshSummary()
+
         // ---- MAP panel: \u0645\u0648\u0642\u0639 \u062D\u0642\u064A\u0642\u064A \u0644\u0644\u062C\u0647\u0627\u0632 ----
         findViewById<TextView>(R.id.mapStatus).setOnClickListener {
             requestDeviceLocation()
@@ -2725,7 +2869,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             fetchAndShowLocation()
         }
 
-    // ---- MAP panel: زر فتح الموقع في تطبيق خرائط خارجي ----
+        // ---- MAP panel: زر فتح الموقع في تطبيق خرائط خارجي ----
         findViewById<TextView>(R.id.mapOpenExternalButton).setOnClickListener {
             if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
                 respond("ماكانش موقع محفوظ حاليًا")
@@ -2982,7 +3126,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 gravity = android.view.Gravity.CENTER_VERTICAL
             }
             val label = TextView(this).apply {
-                text = "🗺️ ${savedMap.name}"
+                text = savedMap.name.uppercase()
                 setTextColor(android.graphics.Color.parseColor("#D7FBFF"))
                 textSize = 11f
                 typeface = Typeface.MONOSPACE
@@ -2991,7 +3135,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 )
             }
             val deleteBtn = TextView(this).apply {
-                text = "✕"
+                text = "X"
                 setTextColor(android.graphics.Color.parseColor("#FF5050"))
                 textSize = 13f
                 setPadding((10 * density).toInt(), 0, 0, 0)
@@ -3156,9 +3300,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun setupNavigationPresets() {
-        setupPresetDestinationRow(R.id.navHomeRow, "waypoint_home", "🏠 المنزل")
-        setupPresetDestinationRow(R.id.navWorkRow, "waypoint_work", "💼 العمل")
-        setupPresetDestinationRow(R.id.navUniversityRow, "waypoint_university", "🎓 الجامعة")
+        setupPresetDestinationRow(R.id.navHomeRow, "waypoint_home", "HOME")
+        setupPresetDestinationRow(R.id.navWorkRow, "waypoint_work", "WORK")
+        setupPresetDestinationRow(R.id.navUniversityRow, "waypoint_university", "UNIVERSITY")
     }
 
     private fun renderWaypointsList() {
@@ -3183,7 +3327,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val km = if (lastKnownLat != 0.0 || lastKnownLon != 0.0) {
                     " — ${"%.1f".format(distanceToKm(wp.lat, wp.lon))} كم"
                 } else ""
-                text = "📍 ${wp.name}$km"
+                text = "${wp.name.uppercase()}$km"
                 setTextColor(android.graphics.Color.parseColor("#D7FBFF"))
                 textSize = 11f
                 typeface = Typeface.MONOSPACE
@@ -3192,7 +3336,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 )
             }
             val deleteBtn = TextView(this).apply {
-                text = "✕"
+                text = "X"
                 setTextColor(android.graphics.Color.parseColor("#FF5050"))
                 textSize = 13f
                 setPadding((10 * density).toInt(), 0, 0, 0)
@@ -3853,6 +3997,74 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .apply()
     }
 
+    /** نافذة إضافة محاضرة عبر أزرار بدل الصوت — تبني أمرًا نصيًا وتمرره لنفس منطق التحليل الصوتي */
+    private fun showAddClassDialog() {
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        val subjectInput = android.widget.EditText(this).apply { hint = "اسم المادة" }
+        val daySpinner = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(
+                this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                weekDayNames.values.toList()
+            )
+        }
+        val hourInput = android.widget.EditText(this).apply {
+            hint = "الساعة (مثلاً 9)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        container.addView(subjectInput)
+        container.addView(daySpinner)
+        container.addView(hourInput)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("إضافة محاضرة")
+            .setView(container)
+            .setPositiveButton("حفظ") { _, _ ->
+                val subject = subjectInput.text.toString().trim().ifBlank { "مادة" }
+                val dayName = daySpinner.selectedItem?.toString() ?: "الأحد"
+                val hour = hourInput.text.toString().toIntOrNull() ?: 9
+                handleAddScheduleCommand("أضيف محاضرة $subject يوم $dayName الساعة $hour")
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    /** نافذة إضافة مناسبة سنوية عبر أزرار بدل الصوت */
+    private fun showAddEventDialog() {
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        val nameInput = android.widget.EditText(this).apply { hint = "اسم المناسبة (مثلاً: عيد ميلاد سارة)" }
+        val dayInput = android.widget.EditText(this).apply {
+            hint = "اليوم (1-31)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        val monthInput = android.widget.EditText(this).apply {
+            hint = "الشهر (1-12)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        container.addView(nameInput)
+        container.addView(dayInput)
+        container.addView(monthInput)
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("إضافة مناسبة سنوية")
+            .setView(container)
+            .setPositiveButton("حفظ") { _, _ ->
+                val name = nameInput.text.toString().trim().ifBlank { "مناسبة" }
+                val day = dayInput.text.toString().toIntOrNull() ?: 1
+                val month = monthInput.text.toString().toIntOrNull() ?: 1
+                handleAddEventReminderCommand("$name يوم $day شهر $month")
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
     private fun handleAddScheduleCommand(cmd: String) {
         // \u0627\u0644\u0635\u064A\u063A\u0629: "\u0623\u0636\u064A\u0641 \u0645\u062D\u0627\u0636\u0631\u0629 \u0631\u064A\u0627\u0636\u064A\u0627\u062A \u064A\u0648\u0645 \u0627\u0644\u0623\u062D\u062F \u0627\u0644\u0633\u0627\u0639\u0629 9"
         val dayEntry = weekDayAliases.entries.firstOrNull { cmd.contains(it.key) }
@@ -4001,8 +4213,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         fun maybeFinish(weatherDone: Boolean, newsDone: Boolean) {
             if (weatherDone && newsDone) {
-                val parts = listOfNotNull(weatherPart, eventPart, newsPart.ifBlank { null })
-                respond(parts.joinToString("\u060C "))
+                val now = java.text.SimpleDateFormat("EEEE d MMMM yyyy - HH:mm", Locale("ar")).format(java.util.Date())
+                val reportBody = buildString {
+                    append("التاريخ:\n$now\n\n")
+                    append("الطقس:\n$weatherPart\n\n")
+                    append("أقرب موعد:\n${eventPart ?: "ماكاين شي موعد قريب مسجّل"}\n\n")
+                    append("آخر الأخبار:\n${newsPart.ifBlank { "غير متوفر حاليًا" }}")
+                }
+                showReportPanel("MORNING BRIEFING", reportBody)
+                val spoken = listOfNotNull(weatherPart, eventPart, newsPart.ifBlank { null })
+                respond(spoken.joinToString("\u060C "))
             }
         }
 
