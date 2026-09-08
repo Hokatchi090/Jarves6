@@ -467,7 +467,7 @@ class JarvisDialView @JvmOverloads constructor(
         val y = cy + sin(angle).toFloat() * radius * 0.72f
 
         particlePaint.color = cyanBright
-        particlePaint.alpha = 210
+        particlePaint.alpha = 165
         canvas.drawCircle(x, y, 4.5f + voiceLevel * 4f, particlePaint)
 
         val oppositeAngle = Math.toRadians((-orbitAngle * 0.72f + 150f).toDouble())
@@ -488,7 +488,7 @@ class JarvisDialView @JvmOverloads constructor(
 
         val glow = glowPaint
         glow.color = cyan
-        glow.alpha = if (speaking) 55 else 28
+        glow.alpha = if (speaking) 42 else 22
         glow.setShadowLayer(base * 0.20f, 0f, 0f, cyan)
         canvas.drawCircle(cx, cy, radius * 1.32f, glow)
         glow.clearShadowLayer()
