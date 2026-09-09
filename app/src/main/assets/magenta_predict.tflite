@@ -1,6 +1,0 @@
-import kagglehub
-
-# Download latest version
-path = kagglehub.model_download("google/arbitrary-image-stylization-v1/tfLite/256-int8-prediction")
-
-print("Path to model files:", path)
