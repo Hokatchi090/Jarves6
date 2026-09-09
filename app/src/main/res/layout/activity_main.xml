@@ -763,7 +763,7 @@
                 android:orientation="horizontal"
                 android:layout_marginTop="10dp">
 
-                   <TextView
+                <TextView
                     android:id="@+id/sysIrButton"
                     android:layout_width="0dp"
                     android:layout_height="46dp"
@@ -852,6 +852,22 @@
                 android:padding="14dp"
                 android:gravity="center"
                 android:text="BACKGROUND LISTENING: OFF"
+                android:textColor="#A7EAF2"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.05"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/sysAiProviderButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="AI PROVIDER: GEMINI"
                 android:textColor="#A7EAF2"
                 android:textSize="10sp"
                 android:fontFamily="monospace"
@@ -1030,6 +1046,22 @@
             </LinearLayout>
 
             <TextView
+                android:id="@+id/netRefreshButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="REFRESH"
+                android:textColor="#8DEFFF"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+<TextView
                 android:id="@+id/netRefreshButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1244,7 +1276,7 @@
                     android:imeOptions="actionSend"
                     android:singleLine="true" />
 
-                  <TextView
+                <TextView
                     android:id="@+id/textChatSendButton"
                     android:layout_width="70dp"
                     android:layout_height="48dp"
@@ -1310,7 +1342,7 @@
                 android:clickable="true"
                 android:focusable="true" />
 
-            <TextView
+                    <TextView
                 android:id="@+id/aiSuggestionsText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1341,7 +1373,7 @@
                 android:orientation="vertical"
                 android:padding="18dp">
 
-                   <TextView
+                <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629"
@@ -1444,181 +1476,6 @@
                     android:fontFamily="monospace"
                     android:letterSpacing="0.1" />
 
-                  <TextView
-                    android:id="@+id/moreFakeCallButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="10dp"
-                    android:gravity="center"
-                    android:text="FAKE CALL"
-                    android:textColor="#A7EAF2"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:background="@drawable/hud_glow_card"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-                <TextView
-                    android:id="@+id/moreSendLocationButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center"
-                    android:text="SEND SOS LOCATION"
-                    android:textColor="#A7EAF2"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:background="@drawable/hud_glow_card"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="8dp">
-
-                    <TextView
-                        android:id="@+id/moreRecordStartButton"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="6dp"
-                        android:gravity="center"
-                        android:text="REC START"
-                        android:textColor="#A7EAF2"
-                        android:textSize="10sp"
-                        android:fontFamily="monospace"
-                        android:background="@drawable/hud_glow_card"
-                        android:clickable="true"
-                        android:focusable="true" />
-
-                    <TextView
-                        android:id="@+id/moreRecordStopButton"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="REC STOP"
-                        android:textColor="#A7EAF2"
-                        android:textSize="10sp"
-                        android:fontFamily="monospace"
-                        android:background="@drawable/hud_glow_card"
-                        android:clickable="true"
-                        android:focusable="true" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/moreDefenseInfoButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center"
-                    android:text="SELF-DEFENSE INFO"
-                    android:textColor="#A7EAF2"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:background="@drawable/hud_glow_card"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="20dp"
-                    android:background="#1E323A" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="\u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627"
-                    android:textColor="#76E8F5"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:letterSpacing="0.1" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="10dp">
-
-                    <TextView
-                        android:id="@+id/moreFieldListButton"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="6dp"
-                        android:gravity="center"
-                        android:text="FIELD LOG"
-                        android:textColor="#A7EAF2"
-                        android:textSize="10sp"
-                        android:fontFamily="monospace"
-                        android:background="@drawable/hud_glow_card"
-                        android:clickable="true"
-                        android:focusable="true" />
-
-                    <TextView
-                        android:id="@+id/moreFieldExportButton"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="6dp"
-                        android:gravity="center"
-                        android:text="EXPORT CSV"
-                        android:textColor="#A7EAF2"
-                        android:textSize="10sp"
-                        android:fontFamily="monospace"
-                        android:background="@drawable/hud_glow_card"
-                        android:clickable="true"
-                        android:focusable="true" />
-
-                    <TextView
-                        android:id="@+id/moreCompassButton"
-                        android:layout_width="0dp"
-                        android:layout_height="46dp"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="REC STOP"
-                        android:textColor="#A7EAF2"
-                        android:textSize="10sp"
-                        android:fontFamily="monospace"
-                        android:background="@drawable/hud_glow_card"
-                        android:clickable="true"
-                        android:focusable="true" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/moreDefenseInfoButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center"
-                    android:text="SELF-DEFENSE INFO"
-                    android:textColor="#A7EAF2"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:background="@drawable/hud_glow_card"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="20dp"
-                    android:background="#1E323A" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="\u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627"
-                    android:textColor="#76E8F5"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:letterSpacing="0.1" />
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -1669,7 +1526,87 @@
                         android:clickable="true"
                         android:focusable="true" />
                 </LinearLayout>
-                  <View
+
+                <TextView
+                    android:id="@+id/moreFieldAddButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="ADD FIELD NOTE (GPS)"
+                    android:textColor="#8DEFFF"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/moreRockLookupButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="ROCK LOOKUP"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreRockIdButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="ROCK ID (وصف)"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreGeoErasButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="GEOLOGIC ERAS"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreRockPhotoIdButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="IDENTIFY ROCK FROM PHOTO"
+                    android:textColor="#8DEFFF"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:layout_marginTop="20dp"
@@ -1701,7 +1638,7 @@
                     android:layout_marginTop="10dp"
                     android:orientation="horizontal">
 
-                    <TextView
+                      <TextView
                         android:id="@+id/moreNoteScannerButton"
                         android:layout_width="0dp"
                         android:layout_height="52dp"
@@ -1716,7 +1653,7 @@
                         android:clickable="true"
                         android:focusable="true" />
 
-                      <TextView
+                    <TextView
                         android:id="@+id/moreImaginaryEyeButton"
                         android:layout_width="0dp"
                         android:layout_height="52dp"
@@ -1890,7 +1827,7 @@
                         android:clickable="true"
                         android:focusable="true" />
 
-                      <TextView
+                    <TextView
                         android:id="@+id/moreTrafficButton"
                         android:layout_width="0dp"
                         android:layout_height="52dp"
@@ -2048,6 +1985,65 @@
                         android:focusable="true" />
                 </LinearLayout>
 
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="#1E323A" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="MEDICAL REMINDERS"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <LinearLayout
+                    android:id="@+id/medicalRemindersContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/addMedicationButton"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="ADD MEDICATION"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/addAppointmentButton"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="ADD APPOINTMENT"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/moreStatusText"
                     android:layout_width="match_parent"
@@ -2094,7 +2090,7 @@
         android:padding="4dp"
         android:visibility="gone" />
 
-      <!-- نافذة عرض تقرير مركزية: تظهر فوق كل شي للمعلومات الكبيرة/المفصّلة -->
+    <!-- نافذة عرض تقرير مركزية: تظهر فوق كل شي للمعلومات الكبيرة/المفصّلة -->
     <FrameLayout
         android:id="@+id/reportPanelOverlay"
         android:layout_width="match_parent"
@@ -2185,5 +2181,103 @@
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>
+
+    <!-- زر عائم صغير: يتحرك بحرية، ضغطة = قائمة سريعة، ضغطتين = استماع فوري -->
+    <FrameLayout
+        android:id="@+id/floatingQuickButton"
+        android:layout_width="58dp"
+        android:layout_height="58dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="220dp"
+        android:background="@drawable/hud_glow_card_bright"
+        android:elevation="10dp"
+        android:clickable="true"
+        android:focusable="true">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="J"
+            android:textColor="#8DEFFF"
+            android:textSize="18sp"
+            android:fontFamily="monospace" />
+    </FrameLayout>
+
+    <!-- قائمة الميزات السريعة: تظهر شفافة بجانب الزر العائم -->
+    <LinearLayout
+        android:id="@+id/floatingQuickMenu"
+        android:layout_width="150dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="284dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#DD0F1A1F"
+        android:elevation="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/quickMenuHome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="HOME"
+            android:textColor="#8DEFFF"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/quickMenuMap"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="MAP"
+            android:textColor="#8DEFFF"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/quickMenuAi"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="AI CHAT"
+            android:textColor="#8DEFFF"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/quickMenuVoiceNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="VOICE NOTE"
+            android:textColor="#8DEFFF"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/quickMenuMore"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:text="MORE"
+            android:textColor="#8DEFFF"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
 
 </FrameLayout>
