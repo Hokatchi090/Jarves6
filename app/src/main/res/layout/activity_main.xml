@@ -1,1176 +1,2189 @@
-// ---------------- Call a contact ----------------
-
-    private fun extractNameAfter(cmd: String, marker: String): String {
-        val idx = cmd.indexOf(marker)
-        if (idx == -1) return ""
-        return cmd.substring(idx + marker.length).trim()
-    }
-
-    private fun callContact(name: String) {
-        if (name.isBlank()) {
-            respond("\u0642\u0644\u064A \u0645\u064A\u0646 \u0628\u062F\u0643 \u0623\u062A\u0635\u0644 \u0641\u064A\u0647")
-            return
-        }
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), REQ_CONTACTS)
-            respond("\u0628\u062F\u064A \u0625\u0630\u0646 \u0642\u0631\u0627\u0621\u0629 \u062C\u0647\u0627\u062A \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0623\u0648\u0644\u060C \u062C\u0631\u0628 \u0645\u0631\u0629 \u062A\u0627\u0646\u064A\u0629")
-            return
-        }
-        val cursor = contentResolver.query(
-            ContactsContract.Contacts.CONTENT_URI,
-            null,
-            "${ContactsContract.Contacts.DISPLAY_NAME} LIKE ?",
-            arrayOf("%$name%"),
-            null
-        )
-        cursor?.use { c ->
-            if (c.moveToFirst()) {
-                val contactId = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
-                val phoneCursor = contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    null,
-                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
-                    arrayOf(contactId),
-                    null
-                )
-                phoneCursor?.use { pc ->
-                    if (pc.moveToFirst()) {
-                        val number = pc.getString(
-                            pc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                        )
-                        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
-                            != PackageManager.PERMISSION_GRANTED
-                        ) {
-                            ActivityCompat.requestPermissions(
-                                this, arrayOf(Manifest.permission.CALL_PHONE), REQ_PERMISSIONS
-                            )
-                            respond("\u062E\u0644\u064A\u0646\u064A \u0646\u0637\u0644\u0628 \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0623\u0648\u0644")
-                            return@use
-                        }
-                        try {
-                            startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$number")))
-                            respond("\u0646\u062A\u0635\u0644 \u0628\u0640 $name")
-                        } catch (e: Exception) {
-                            log("\u062E\u0637\u0623 \u0627\u0644\u0627\u062A\u0635\u0627\u0644: ${e.message}")
-                            respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062A\u0635\u0644")
-                        }
-                    } else {
-                        respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u0631\u0642\u0645 \u0647\u0627\u062A\u0641 \u0644\u0640 $name")
-                    }
-                }
-            } else {
-                respond("\u0645\u0627 \u0644\u0642\u064A\u062A \u062C\u0647\u0629 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0633\u0645 $name")
-            }
-        }
-    }
-
-    private fun writeCode(topic: String) {
-        if (topic.isBlank()) {
-            respond("\u0642\u0644\u064A \u0634\u0648 \u0627\u0644\u0643\u0648\u062F \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u064A\u0627\u0647")
-            return
-        }
-        if (GEMINI_API_KEY.isBlank()) {
-            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0643\u062A\u0628\u0644\u0643 \u0643\u0648\u062F")
-            return
-        }
-        respond("\u062E\u0644\u064A\u0646\u064A \u0623\u0643\u062A\u0628\u0644\u0643 \u0627\u0644\u0643\u0648\u062F...")
-        val prompt = "\u0627\u0643\u062A\u0628 \u0643\u0648\u062F \u0628\u0631\u0645\u062C\u064A \u0648\u0627\u0636\u062D \u0648\u0645\u0631\u062A\u0628 \u0644\u0640: $topic. \u0627\u0634\u0631\u062D \u0628\u062C\u0645\u0644\u0629 \u0642\u0635\u064A\u0631\u0629 \u0634\u0648 \u0628\u064A\u0633\u0648\u064A \u0627\u0644\u0643\u0648\u062F."
-        askGeminiForCode(prompt)
-    }
-
-    private fun askGeminiForCode(prompt: String) {
-        val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().apply {
-                    put("parts", JSONArray().put(
-                        JSONObject().apply { put("text", prompt) }
-                    ))
-                }
-            ))
-        }
-        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("x-goog-api-key", GEMINI_API_KEY)
-            .post(body)
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val responseText = response.body?.string() ?: ""
-                    val json = JSONObject(responseText)
-                    val code = json.getJSONArray("candidates")
-                        .getJSONObject(0)
-                        .getJSONObject("content")
-                        .getJSONArray("parts")
-                        .getJSONObject(0)
-                        .getString("text")
-                    runOnUiThread {
-                        log("\u062C\u0627\u0631\u0641\u0633:\n${code.trim()}")
-                        tts.speak("\u0643\u062A\u0628\u062A\u0644\u0643 \u0627\u0644\u0643\u0648\u062F \u0628\u0627\u0644\u0634\u0627\u0634\u0629\u060C \u0634\u0648\u0641\u0647", TextToSpeech.QUEUE_FLUSH, null, null)
-                    }
-                } catch (e: Exception) {
-                    log("\u062E\u0637\u0623 Gemini: ${e.message}")
-                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u0647\u0645 \u0631\u062F Gemini") }
-                }
-            }
-        })
-    }
-
-    // ---------------- Holographic-style product design ----------------
-
-    private fun designHologram(description: String) {
-        if (description.isBlank()) {
-            respond("\u0642\u0644\u064A \u0648\u0635\u0641 \u0627\u0644\u0645\u0646\u062A\u062C \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u0635\u0645\u0645\u0647")
-            return
-        }
-        if (GEMINI_API_KEY.isBlank()) {
-            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0635\u0645\u0645\u0644\u0643")
-            return
-        }
-        respond("\u0628\u0635\u0645\u0645\u0644\u0643...")
-        val prompt = "\u0628\u0646\u0627\u0621\u064B \u0639\u0644\u0649 \u0647\u0627\u062F \u0627\u0644\u0648\u0635\u0641: \"$description\"\u060C \u0627\u0643\u062A\u0628\u0644\u064A \u0645\u0648\u0627\u0635\u0641\u0627\u062A \u062A\u0635\u0645\u064A\u0645 \u0645\u0646\u0638\u0645\u0629 \u0648\u0642\u0635\u064A\u0631\u0629 " +
-                "(\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u062A\u062C\u060C \u0627\u0644\u0642\u064A\u0627\u0633\u0627\u062A \u0644\u0648 \u0645\u0648\u062C\u0648\u062F\u0629\u060C \u0627\u0644\u0645\u0648\u0627\u062F \u0627\u0644\u0645\u0642\u062A\u0631\u062D\u0629\u060C \u0648\u0635\u0641 \u0645\u062E\u062A\u0635\u0631 \u0628\u062C\u0645\u0644\u062A\u064A\u0646)\u060C " +
-                "\u0628\u0634\u0643\u0644 \u0646\u0642\u0627\u0637 \u0642\u0635\u064A\u0631\u0629 \u062A\u0635\u0644\u062D \u062A\u0646\u0639\u0631\u0636 \u0628\u0634\u0627\u0634\u0629 \u0647\u0648\u0644\u0648\u062C\u0631\u0627\u0645\u064A\u0629"
-        askGeminiForHologram(prompt)
-    }
-
-    private fun askGeminiForHologram(prompt: String) {
-        val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().put(
-                JSONObject().apply {
-                    put("parts", JSONArray().put(
-                        JSONObject().apply { put("text", prompt) }
-                    ))
-                }
-            ))
-        }
-        val body = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("x-goog-api-key", GEMINI_API_KEY)
-            .post(body)
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0646\u062A") }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val responseText = response.body?.string() ?: ""
-                    val json = JSONObject(responseText)
-                    val spec = json.getJSONArray("candidates")
-                        .getJSONObject(0)
-                        .getJSONObject("content")
-                        .getJSONArray("parts")
-                        .getJSONObject(0)
-                        .getString("text")
-                    runOnUiThread {
-                        showHologramDialog(spec.trim())
-                        respond("\u0647\u0627\u0643 \u0627\u0644\u062A\u0635\u0645\u064A\u0645")
-                    }
-                } catch (e: Exception) {
-                    log("\u062E\u0637\u0623 \u0627\u0644\u062A\u0635\u0645\u064A\u0645: ${e.message}")
-                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u062C\u0647\u0632 \u0627\u0644\u062A\u0635\u0645\u064A\u0645") }
-                }
-            }
-        })
-    }
-
-    private fun showHologramDialog(specText: String) {
-        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-
-        val container = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#000000"))
-        }
-
-        val textView = TextView(this).apply {
-            text = specText
-            setTextColor(Color.parseColor("#00F6FF"))
-            textSize = 18f
-            typeface = Typeface.MONOSPACE
-            gravity = Gravity.CENTER
-            setPadding(60, 60, 60, 60)
-            setShadowLayer(24f, 0f, 0f, Color.parseColor("#00F6FF"))
-        }
-        val textParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply { gravity = Gravity.CENTER }
-        container.addView(textView, textParams)
-
-        val closeButton = Button(this).apply {
-            text = "\u2715 \u0625\u063A\u0644\u0627\u0642"
-            setTextColor(Color.parseColor("#00F6FF"))
-            setBackgroundColor(Color.TRANSPARENT)
-            setOnClickListener { dialog.dismiss() }
-        }
-        val closeParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            topMargin = 60
-            rightMargin = 40
-        }
-        container.addView(closeButton, closeParams)
-
-        dialog.setContentView(container)
-        dialog.show()
-
-        ObjectAnimator.ofFloat(textView, "rotationY", 0f, 360f).apply {
-            duration = 6000
-            repeatCount = ObjectAnimator.INFINITE
-            start()
-        }
-        ObjectAnimator.ofFloat(textView, "alpha", 1f, 0.6f).apply {
-            duration = 900
-            repeatMode = ObjectAnimator.REVERSE
-            repeatCount = ObjectAnimator.INFINITE
-            start()
-        }
-    }
-
-    // ---------------- Explain any topic (geology, etc.) via Gemini ----------------
-
-    private fun extractExplainTopic(cmd: String): String {
-        val marker = when {
-            cmd.contains("\u0627\u0634\u0631\u062D\u0644\u064A") -> "\u0627\u0634\u0631\u062D\u0644\u064A"
-            cmd.contains("\u0627\u0634\u0631\u062D \u0644\u064A") -> "\u0627\u0634\u0631\u062D \u0644\u064A"
-            cmd.contains("\u0641\u0647\u0645\u0646\u064A") -> "\u0641\u0647\u0645\u0646\u064A"
-            cmd.contains("\u0627\u0641\u062A\u062D \u0645\u0648\u0636\u0648\u0639") -> "\u0645\u0648\u0636\u0648\u0639"
-            cmd.contains("\u0634\u0648 \u0647\u0648") -> "\u0634\u0648 \u0647\u0648"
-            else -> "\u0634\u0648 \u0647\u064A"
-        }
-        return extractNameAfter(cmd, marker)
-    }
-
-    private val offlineKnowledge = mapOf(
-        "\u0627\u0644\u0627\u0633\u0644\u0627\u0645" to "\u0627\u0644\u0625\u0633\u0644\u0627\u0645 \u062F\u064A\u0646 \u062A\u0648\u062D\u064A\u062F\u064A\u060C \u0646\u0632\u0644 \u0639\u0644\u0649 \u0627\u0644\u0646\u0628\u064A \u0645\u062D\u0645\u062F \u0635\u0644\u0649 \u0627\u0644\u0644\u0647 \u0639\u0644\u064A\u0647 \u0648\u0633\u0644\u0645 \u0628\u0627\u0644\u0642\u0631\u0622\u0646 \u0627\u0644\u0643\u0631\u064A\u0645. \u0645\u0646 \u0623\u0631\u0643\u0627\u0646\u0647 \u0627\u0644\u062E\u0645\u0633\u0629: \u0627\u0644\u0634\u0647\u0627\u062F\u062A\u064A\u0646\u060C \u0627\u0644\u0635\u0644\u0627\u0629\u060C \u0627\u0644\u0632\u0643\u0627\u0629\u060C \u0627\u0644\u0635\u064A\u0627\u0645 \u0628\u0631\u0645\u0636\u0627\u0646\u060C \u0648\u0627\u0644\u062D\u062C \u0644\u0645\u0646 \u0627\u0633\u062A\u0637\u0627\u0639. \u064A\u0624\u0645\u0646 \u0627\u0644\u0645\u0633\u0644\u0645\u0648\u0646 \u0628\u0627\u0644\u0644\u0647 \u0627\u0644\u0648\u0627\u062D\u062F\u060C \u0648\u0628\u0627\u0644\u0623\u0646\u0628\u064A\u0627\u0621 \u0648\u0627\u0644\u0631\u0633\u0644 \u0645\u0646 \u0642\u0628\u0644 \u0645\u062D\u0645\u062F \u0645\u062A\u0644 \u0645\u0648\u0633\u0649 \u0648\u0639\u064A\u0633\u0649 \u0639\u0644\u064A\u0647\u0645 \u0627\u0644\u0633\u0644\u0627\u0645.",
-        "\u0627\u0644\u0645\u0633\u064A\u062D\u064A\u0629" to "\u0627\u0644\u0645\u0633\u064A\u062D\u064A\u0629 \u062F\u064A\u0646 \u062A\u0648\u062D\u064A\u062F\u064A \u064A\u0642\u0648\u0645 \u0639\u0644\u0649 \u062A\u0639\u0627\u0644\u064A\u0645 \u0627\u0644\u0633\u064A\u062F \u0627\u0644\u0645\u0633\u064A\u062D \u0639\u064A\u0633\u0649 \u0628\u0646 \u0645\u0631\u064A\u0645 \u0643\u0645\u0627 \u0648\u0631\u062F\u062A \u0628\u0627\u0644\u0625\u0646\u062C\u064A\u0644. \u0645\u0646 \u0623\u0647\u0645 \u0645\u0639\u062A\u0642\u062F\u0627\u062A\u0647\u0627 \u0641\u0643\u0631\u0629 \u0627\u0644\u062B\u0627\u0644\u0648\u062B \u0627\u0644\u0623\u0642\u062F\u0633 (\u0627\u0644\u0622\u0628 \u0648\u0627\u0644\u0627\u0628\u0646 \u0648\u0627\u0644\u0631\u0648\u062D \u0627\u0644\u0642\u062F\u0633)\u060C \u0648\u0637\u0642\u0648\u0633\u0647\u0627 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u062A\u0634\u0645\u0644 \u0627\u0644\u0645\u0639\u0645\u0648\u062F\u064A\u0629 \u0648\u0627\u0644\u0642\u0631\u0628\u0627\u0646 \u0627\u0644\u0645\u0642\u062F\u0633\u060C \u0648\u0641\u064A\u0647\u0627 \u0637\u0648\u0627\u0626\u0641 \u0643\u0628\u0631\u0649 \u0645\u062A\u0644 \u0627\u0644\u0643\u0627\u062B\u0648\u0644\u064A\u0643 \u0648\u0627\u0644\u0623\u0631\u062B\u0648\u0630\u0643\u0633 \u0648\u0627\u0644\u0628\u0631\u0648\u062A\u0633\u062A\u0627\u0646\u062A.",
-        "\u0627\u0644\u064A\u0647\u0648\u062F\u064A\u0629" to "\u0627\u0644\u064A\u0647\u0648\u062F\u064A\u0629 \u0645\u0646 \u0623\u0642\u062F\u0645 \u0627\u0644\u062F\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u0648\u062D\u064A\u062F\u064A\u0629\u060C \u0643\u062A\u0627\u0628\u0647\u0627 \u0627\u0644\u0645\u0642\u062F\u0633 \u0627\u0644\u062A\u0648\u0631\u0627\u0629 (\u0627\u0644\u0639\u0647\u062F \u0627\u0644\u0642\u062F\u064A\u0645). \u062A\u0624\u0645\u0646 \u0628\u0646\u0628\u0648\u0629 \u0645\u0648\u0633\u0649 \u0639\u0644\u064A\u0647 \u0627\u0644\u0633\u0644\u0627\u0645 \u0648\u0627\u0633\u062A\u0644\u0627\u0645\u0647 \u0627\u0644\u0648\u0635\u0627\u064A\u0627 \u0627\u0644\u0639\u0634\u0631\u060C \u0648\u0645\u0646 \u0634\u0639\u0627\u0626\u0631\u0647\u0627 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629 \u0627\u0644\u0633\u0628\u062A (\u064A\u0648\u0645 \u0627\u0644\u0631\u0627\u062D\u0629) \u0648\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0637\u0639\u0627\u0645 \u0627\u0644\u062D\u0644\u0627\u0644 \u062D\u0633\u0628 \u0627\u0644\u0634\u0631\u064A\u0639\u0629 \u0627\u0644\u064A\u0647\u0648\u062F\u064A\u0629 (\u0643\u0648\u0634\u064A\u0631).",
-        "\u0627\u0644\u0628\u0648\u0630\u064A\u0629" to "\u0627\u0644\u0628\u0648\u0630\u064A\u0629 \u062F\u064A\u0627\u0646\u0629 \u0648\u0641\u0644\u0633\u0641\u0629 \u0631\u0648\u062D\u064A\u0629 \u0623\u0633\u0633\u0647\u0627 \u0633\u064A\u062F\u0647\u0627\u0631\u062A\u0627 \u063A\u0648\u062A\u0627\u0645\u0627 (\u0628\u0648\u0630\u0627) \u0628\u0627\u0644\u0647\u0646\u062F. \u062A\u0631\u0643\u0632 \u0639\u0644\u0649 \u062A\u062D\u0642\u064A\u0642 \u0627\u0644\u062A\u0646\u0648\u064A\u0631 \u0648\u0627\u0644\u062A\u062D\u0631\u0631 \u0645\u0646 \u0627\u0644\u0645\u0639\u0627\u0646\u0627\u0629 \u0639\u0646 \u0637\u0631\u064A\u0642 \u0627\u062A\u0628\u0627\u0639 \u0627\u0644\u0637\u0631\u064A\u0642 \u0627\u0644\u062B\u0645\u0627\u0646\u064A \u0627\u0644\u0646\u0628\u064A\u0644\u060C \u0648\u062A\u0624\u0645\u0646 \u0628\u0645\u0628\u062F\u0623 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062C\u0633\u062F (\u0627\u0644\u0643\u0627\u0631\u0645\u0627).",
-        "\u0627\u0644\u0647\u0646\u062F\u0648\u0633\u064A\u0629" to "\u0627\u0644\u0647\u0646\u062F\u0648\u0633\u064A\u0629 \u0645\u0646 \u0623\u0642\u062F\u0645 \u0627\u0644\u062F\u064A\u0627\u0646\u0627\u062A \u0628\u0627\u0644\u0639\u0627\u0644\u0645\u060C \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0622\u0644\u0647\u0629 \u0648\u0641\u064A\u0647\u0627 \u0641\u0644\u0633\u0641\u0627\u062A \u0645\u062A\u0646\u0648\u0639\u0629. \u062A\u0624\u0645\u0646 \u0628\u0645\u0628\u062F\u0623 \u0627\u0644\u0643\u0627\u0631\u0645\u0627 \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u062C\u0633\u062F (\u0627\u0644\u062A\u0646\u0627\u0633\u062E)\u060C \u0648\u0643\u062A\u0628\u0647\u0627 \u0627\u0644\u0645\u0642\u062F\u0633\u0629 \u062A\u0634\u0645\u0644 \u0627\u0644\u0641\u064A\u062F\u0627 \u0648\u0627\u0644\u0628\u0647\u0627\u063A\u0627\u0641\u0627\u062F\u063A\u064A\u062A\u0627\u060C \u0648\u0623\u0647\u0645 \u0622\u0644\u0647\u062A\u0647\u0627 \u0628\u0631\u0627\u0647\u0645\u0627 \u0648\u0641\u064A\u0634\u0646\u0648 \u0648\u0634\u064A\u0641\u0627."
-    )
-
-    private fun explainTopic(topic: String) {
-        if (topic.isBlank()) {
-            respond("\u0642\u0644\u064A \u0634\u0648 \u0627\u0644\u0645\u0648\u0636\u0648\u0639 \u064A\u0644\u064A \u0628\u062F\u0643 \u0623\u0634\u0631\u062D\u0644\u0643 \u064A\u0627\u0647")
-            return
-        }
-
-        val offlineMatch = offlineKnowledge.entries.firstOrNull { topic.contains(it.key) }
-        if (offlineMatch != null) {
-            respond(offlineMatch.value)
-            return
-        }
-
-        if (GEMINI_API_KEY.isBlank()) {
-            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u0637 \u0645\u0641\u062A\u0627\u062D Gemini \u0627\u0644\u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u0623\u0642\u062F\u0631 \u0623\u0634\u0631\u062D\u0644\u0643 \u0645\u0648\u0627\u0636\u064A\u0639 \u0632\u064A\u0627\u062F\u0629")
-            return
-        }
-        respond("\u062E\u0644\u064A\u0646\u064A \u0623\u0634\u0631\u062D\u0644\u0643...")
-        val prompt = "\u0627\u0634\u0631\u062D\u0644\u064A \u0645\u0648\u0636\u0648\u0639 \"$topic\" \u0628\u0637\u0631\u064A\u0642\u0629 \u0633\u0647\u0644\u0629 \u0648\u0645\u0628\u0633\u0637\u0629 \u0645\u0639 \u0645\u062B\u0627\u0644 \u0625\u0630\u0627 \u0623\u0645\u0643\u0646\u060C \u0628\u0623\u0633\u0644\u0648\u0628 \u0642\u0631\u064A\u0628 \u0648\u0645\u0641\u0647\u0648\u0645"
-        askGemini(prompt)
-    }
-
-    // ---------------- Unit + currency converter ----------------
-
-    // أسعار صرف تقريبية وثابتة (تحدَّث يدويًا هنا كل فترة)، القاعدة: 1 دولار أمريكي =
-    private val fixedRatesToUsd = mapOf(
-        "\u062F\u0648\u0644\u0627\u0631" to 1.0, "dollar" to 1.0, "usd" to 1.0,
-        "\u064A\u0648\u0631\u0648" to 1.08, "euro" to 1.08,
-        "\u062F\u064A\u0646\u0627\u0631" to (1.0 / 135.0),      // الدينار الجزائري (تقريبي)
-        "\u0631\u064A\u0627\u0644" to (1.0 / 3.75)             // الريال السعودي (تقريبي)
-    )
-    private val currencyDisplayName = mapOf(
-        "\u062F\u0648\u0644\u0627\u0631" to "\u062F\u0648\u0644\u0627\u0631", "dollar" to "\u062F\u0648\u0644\u0627\u0631", "usd" to "\u062F\u0648\u0644\u0627\u0631",
-        "\u064A\u0648\u0631\u0648" to "\u064A\u0648\u0631\u0648", "euro" to "\u064A\u0648\u0631\u0648",
-        "\u062F\u064A\u0646\u0627\u0631" to "\u062F\u064A\u0646\u0627\u0631 \u062C\u0632\u0627\u0626\u0631\u064A",
-        "\u0631\u064A\u0627\u0644" to "\u0631\u064A\u0627\u0644 \u0633\u0639\u0648\u062F\u064A"
-    )
-
-    private fun tryConvertCurrency(cmd: String, value: Double): String? {
-        val foundCurrencies = fixedRatesToUsd.keys.filter { cmd.contains(it) }.distinct()
-        if (foundCurrencies.size < 2) return null
-
-        // نفترض أول عملة مذكورة هي المصدر، وثاني عملة مختلفة هي الهدف
-        val from = foundCurrencies.first()
-        val to = foundCurrencies.firstOrNull { it != from && currencyDisplayName[it] != currencyDisplayName[from] }
-            ?: return null
-
-        val valueInUsd = value * (fixedRatesToUsd[from] ?: 1.0)
-        val converted = valueInUsd / (fixedRatesToUsd[to] ?: 1.0)
-        return "${value} ${currencyDisplayName[from]} \u062A\u0633\u0627\u0648\u064A \u062A\u0642\u0631\u064A\u0628\u064B\u0627 ${"%.2f".format(converted)} ${currencyDisplayName[to]} " +
-                "(\u0623\u0633\u0639\u0627\u0631 \u062A\u0642\u0631\u064A\u0628\u064A\u0629 \u062B\u0627\u0628\u062A\u0629\u060C \u0642\u062F \u062A\u062E\u062A\u0644\u0641 \u0639\u0646 \u0627\u0644\u0633\u0639\u0631 \u0627\u0644\u062D\u0642\u064A\u0642\u064A)"
-    }
-
-    private fun convertUnits(cmd: String): String {
-        val numberRegex = Regex("""(\d+(?:\.\d+)?)""")
-        val match = numberRegex.find(cmd) ?: return "\u0642\u0644\u064A \u0627\u0644\u0631\u0642\u0645 \u064A\u0644\u064A \u0628\u062F\u0643 \u062A\u062D\u0648\u0644\u0647"
-        val value = match.groupValues[1].toDouble()
-
-        tryConvertCurrency(cmd, value)?.let { return it }
-
-        return when {
-            cmd.contains("\u0643\u064A\u0644\u0648\u0645\u062A\u0631") && cmd.contains("\u0645\u064A\u0644") -> {
-                val miles = value * 0.621371
-                "${value} \u0643\u0645 \u064A\u0633\u0627\u0648\u064A \u062A\u0642\u0631\u064A\u0628\u064B\u0627 ${"%.2f".format(miles)} \u0645\u064A\u0644"
-            }
-            cmd.contains("\u0643\u064A\u0644\u0648") && cmd.contains("\u0628\u0627\u0648\u0646\u062F") -> {
-                val pounds = value * 2.20462
-                "${value} \u0643\u064A\u0644\u0648 \u064A\u0633\u0627\u0648\u064A \u062A\u0642\u0631\u064A\u0628\u064B\u0627 ${"%.2f".format(pounds)} \u0628\u0627\u0648\u0646\u062F"
-            }
-            cmd.contains("\u0645\u0626\u0648\u064A\u0629") && cmd.contains("\u0641\u0647\u0631\u0646\u0647\u0627\u064A\u062A") -> {
-                val fahrenheit = (value * 9 / 5) + 32
-                "${value} \u062F\u0631\u062C\u0629 \u0645\u0626\u0648\u064A\u0629 \u064A\u0633\u0627\u0648\u064A ${"%.1f".format(fahrenheit)} \u0641\u0647\u0631\u0646\u0647\u0627\u064A\u062A"
-            }
-            else -> "\u0642\u0644\u064A \u0627\u0644\u062A\u062D\u0648\u064A\u0644 \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u062D\u0648\u0644 10 \u0643\u064A\u0644\u0648\u0645\u062A\u0631 \u0627\u0644\u0649 \u0645\u064A\u0644"
-        }
-    }
-
-    // ---------------- Pomodoro timer ----------------
-
-    private var pomodoroTimer: CountDownTimer? = null
-    private var pomodoroOnBreak = false
-
-    private fun handlePomodoroCommand(cmd: String) {
-        when {
-            cmd.contains("\u0623\u0648\u0642\u0641") || cmd.contains("\u0627\u0644\u063A\u0627\u0621") || cmd.contains("stop") || cmd.contains("cancel") -> {
-                pomodoroTimer?.cancel()
-                pomodoroTimer = null
-                respond("\u0623\u0648\u0642\u0641\u062A \u0627\u0644\u0628\u0648\u0645\u0648\u062F\u0648\u0631\u0648")
-            }
-            else -> startPomodoroFocus()
-        }
-    }
-
-    private fun startPomodoroFocus() {
-        pomodoroTimer?.cancel()
-        pomodoroOnBreak = false
-        respond("\u0628\u062F\u0623\u062A \u062C\u0644\u0633\u0629 \u062A\u0631\u0643\u064A\u0632 25 \u062F\u0642\u064A\u0642\u0629\u060C \u062A\u0641\u0627\u062F\u0644 \u0641\u064A \u0634\u063A\u0644\u0643 \u0648\u0645\u0627 \u062A\u062A\u0634\u062A\u0651\u062A\u0634")
-        pomodoroTimer = object : CountDownTimer(25 * 60 * 1000L, 60_000L) {
-            override fun onTick(millisUntilFinished: Long) {}
-            override fun onFinish() {
-                respond("25 \u062F\u0642\u064A\u0642\u0629 \u0643\u0645\u0644\u0648\u0627! \u0648\u0642\u062A \u0631\u0627\u062D\u0629 5 \u062F\u0642\u0627\u064A\u0642 \u062F\u0627\u0628\u0627")
-                recordCompletedPomodoroSession()
-                startPomodoroBreak()
-            }
-        }.start()
-    }
-
-    private fun startPomodoroBreak() {
-        pomodoroOnBreak = true
-        pomodoroTimer = object : CountDownTimer(5 * 60 * 1000L, 60_000L) {
-            override fun onTick(millisUntilFinished: Long) {}
-            override fun onFinish() {
-                respond("\u062E\u0644\u0635\u062A \u0627\u0644\u0631\u0627\u062D\u0629\u060C \u0631\u062C\u0639\u0646\u0627 \u0644\u062C\u0644\u0633\u0629 \u062A\u0631\u0643\u064A\u0632 \u062C\u062F\u064A\u062F\u0629\u061F \u0642\u0648\u0644\u064A \u0628\u0648\u0645\u0648\u062F\u0648\u0631\u0648")
-                pomodoroOnBreak = false
-                pomodoroTimer = null
-            }
-        }.start()
-    }
-
-    // ---------------- Scanned notes search ----------------
-
-    private fun searchScannedNotes(cmd: String): String {
-        val query = cmd.substringAfter("\u0639\u0646").trim().ifBlank {
-            cmd.substringAfter("\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u064A").trim()
-        }
-        val raw = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("scanned_notes_json", "[]") ?: "[]"
-        val matches = mutableListOf<String>()
-        try {
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val text = obj.getString("text")
-                if (query.isBlank() || text.contains(query, ignoreCase = true)) {
-                    matches.add(text.take(80))
-                }
-            }
-        } catch (e: Exception) { }
-        return if (matches.isEmpty()) {
-            "\u0645\u0627\u0644\u0642\u064A\u062A\u0634 \u0623\u064A \u0645\u0644\u0627\u062D\u0638\u0629 \u062A\u0637\u0627\u0628\u0642 \u0628\u062D\u062B\u0643"
-        } else {
-            "\u0644\u0642\u064A\u062A ${matches.size} \u0645\u0644\u0627\u062D\u0638\u0629: " + matches.take(3).joinToString(" | ")
-        }
-    }
-
-    // ---------------- Daily question game ----------------
-
-    private val dailyQuestionBank = listOf(
-        "\u0645\u0627 \u0647\u064A \u0623\u0637\u0648\u0644 \u0633\u0648\u0631\u0629 \u0641\u064A \u0627\u0644\u0642\u0631\u0622\u0646\u061F" to "\u0633\u0648\u0631\u0629 \u0627\u0644\u0628\u0642\u0631\u0629",
-        "\u0643\u0645 \u0639\u062F\u062F \u0642\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0634\u0645\u0633\u064A\u0629\u061F" to "8 \u0643\u0648\u0627\u0643\u0628",
-        "\u0645\u0627 \u0647\u064A \u0623\u0643\u0628\u0631 \u0642\u0627\u0631\u0629 \u0641\u064A \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 \u0627\u0644\u0634\u0645\u0633\u064A\u0629\u061F" to "\u0627\u0644\u0645\u0634\u062A\u0631\u064A",
-        "\u0641\u064A \u0623\u064A \u0633\u0646\u0629 \u0641\u062A\u062D \u0627\u0644\u062C\u0632\u0627\u0626\u0631 (\u0627\u0644\u0641\u062A\u062D \u0627\u0644\u0625\u0633\u0644\u0627\u0645\u064A)\u061F" to "647 \u0645\u064A\u0644\u0627\u062F\u064A \u062A\u0642\u0631\u064A\u0628\u064B\u0627",
-        "\u0645\u0627 \u0647\u064A \u0639\u0627\u0635\u0645\u0629 \u0627\u0644\u064A\u0627\u0628\u0627\u0646\u061F" to "\u0637\u0648\u0643\u064A\u0648",
-        "\u0643\u0645 \u0639\u062F\u062F \u0623\u0631\u0643\u0627\u0646 \u0627\u0644\u0625\u0633\u0644\u0627\u0645\u061F" to "5 \u0623\u0631\u0643\u0627\u0646",
-        "\u0645\u0627 \u0647\u0648 \u0623\u0633\u0631\u0639 \u062D\u064A\u0648\u0627\u0646 \u0628\u0631\u064A \u0641\u064A \u0627\u0644\u0639\u0627\u0644\u0645\u061F" to "\u0627\u0644\u0641\u0647\u062F \u0627\u0644\u0635\u064A\u0627\u062F",
-        "\u0645\u0627 \u0647\u064A \u0623\u0637\u0648\u0644 \u0646\u0647\u0631 \u0641\u064A \u0627\u0644\u0639\u0627\u0644\u0645\u061F" to "\u0646\u0647\u0631 \u0627\u0644\u0646\u064A\u0644"
-    )
-
-    private fun getDailyQuestion(): String {
-        val dayOfYear = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
-        val (question, answer) = dailyQuestionBank[dayOfYear % dailyQuestionBank.size]
-        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-        val lastAskedDay = prefs.getInt("daily_question_day", -1)
-        if (lastAskedDay == dayOfYear) {
-            return "$question (\u0627\u0644\u062C\u0648\u0627\u0628: $answer)"
-        }
-        prefs.edit().putInt("daily_question_day", dayOfYear).apply()
-        return question
-    }
-
-    // ---------------- University schedule ----------------
-
-    data class ClassEntry(val subject: String, val dayOfWeek: Int, val hour: Int, val minute: Int)
-
-    // 1=الأحد ... 7=السبت (نفس ترقيم Calendar.DAY_OF_WEEK)
-    private val weekDayNames = mapOf(
-        1 to "\u0627\u0644\u0623\u062D\u062F", 2 to "\u0627\u0644\u0627\u062B\u0646\u064A\u0646", 3 to "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621",
-        4 to "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", 5 to "\u0627\u0644\u062E\u0645\u064A\u0633", 6 to "\u0627\u0644\u062C\u0645\u0639\u0629", 7 to "\u0627\u0644\u0633\u0628\u062A"
-    )
-    private val weekDayAliases = mapOf(
-        "\u0627\u0644\u0623\u062D\u062F" to 1, "\u0627\u0644\u0627\u062B\u0646\u064A\u0646" to 2, "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621" to 3,
-        "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621" to 4, "\u0627\u0644\u062E\u0645\u064A\u0633" to 5, "\u0627\u0644\u062C\u0645\u0639\u0629" to 6, "\u0627\u0644\u0633\u0628\u062A" to 7
-    )
-
-    private fun loadSchedule(): MutableList<ClassEntry> {
-        val raw = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("class_schedule_json", "[]") ?: "[]"
-        val list = mutableListOf<ClassEntry>()
-        try {
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(ClassEntry(obj.getString("subject"), obj.getInt("day"), obj.getInt("hour"), obj.getInt("minute")))
-            }
-        } catch (e: Exception) { }
-        return list
-    }
-
-    private fun saveSchedule(list: List<ClassEntry>) {
-        val arr = JSONArray()
-        list.forEach {
-            val obj = JSONObject()
-            obj.put("subject", it.subject)
-            obj.put("day", it.dayOfWeek)
-            obj.put("hour", it.hour)
-            obj.put("minute", it.minute)
-            arr.put(obj)
-        }
-        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
-            .putString("class_schedule_json", arr.toString())
-            .apply()
-    }
-
-    /** نافذة إضافة محاضرة عبر أزرار بدل الصوت — تبني أمرًا نصيًا وتمرره لنفس منطق التحليل الصوتي */
-    private fun showAddClassDialog() {
-        val container = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
-        val subjectInput = android.widget.EditText(this).apply { hint = "اسم المادة" }
-        val daySpinner = android.widget.Spinner(this).apply {
-            adapter = android.widget.ArrayAdapter(
-                this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                weekDayNames.values.toList()
-            )
-        }
-        val hourInput = android.widget.EditText(this).apply {
-            hint = "الساعة (مثلاً 9)"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        }
-        container.addView(subjectInput)
-        container.addView(daySpinner)
-        container.addView(hourInput)
-
-        android.app.AlertDialog.Builder(this)
-            .setTitle("إضافة محاضرة")
-            .setView(container)
-            .setPositiveButton("حفظ") { _, _ ->
-                val subject = subjectInput.text.toString().trim().ifBlank { "مادة" }
-                val dayName = daySpinner.selectedItem?.toString() ?: "الأحد"
-                val hour = hourInput.text.toString().toIntOrNull() ?: 9
-                handleAddScheduleCommand("أضيف محاضرة $subject يوم $dayName الساعة $hour")
-            }
-            .setNegativeButton("إلغاء", null)
-            .show()
-    }
-
-    /** نافذة إضافة مناسبة سنوية عبر أزرار بدل الصوت */
-    private fun showAddEventDialog() {
-        val container = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
-        val nameInput = android.widget.EditText(this).apply { hint = "اسم المناسبة (مثلاً: عيد ميلاد سارة)" }
-        val dayInput = android.widget.EditText(this).apply {
-            hint = "اليوم (1-31)"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        }
-        val monthInput = android.widget.EditText(this).apply {
-            hint = "الشهر (1-12)"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        }
-        container.addView(nameInput)
-        container.addView(dayInput)
-        container.addView(monthInput)
-
-        android.app.AlertDialog.Builder(this)
-            .setTitle("إضافة مناسبة سنوية")
-            .setView(container)
-            .setPositiveButton("حفظ") { _, _ ->
-                val name = nameInput.text.toString().trim().ifBlank { "مناسبة" }
-                val day = dayInput.text.toString().toIntOrNull() ?: 1
-                val month = monthInput.text.toString().toIntOrNull() ?: 1
-                handleAddEventReminderCommand("$name يوم $day شهر $month")
-            }
-            .setNegativeButton("إلغاء", null)
-            .show()
-    }
-
-    private fun handleAddScheduleCommand(cmd: String) {
-        // \u0627\u0644\u0635\u064A\u063A\u0629: "\u0623\u0636\u064A\u0641 \u0645\u062D\u0627\u0636\u0631\u0629 \u0631\u064A\u0627\u0636\u064A\u0627\u062A \u064A\u0648\u0645 \u0627\u0644\u0623\u062D\u062F \u0627\u0644\u0633\u0627\u0639\u0629 9"
-        val dayEntry = weekDayAliases.entries.firstOrNull { cmd.contains(it.key) }
-        if (dayEntry == null) {
-            respond("\u0642\u0648\u0644\u064A \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u0623\u0636\u064A\u0641 \u0645\u062D\u0627\u0636\u0631\u0629 \u0631\u064A\u0627\u0636\u064A\u0627\u062A \u064A\u0648\u0645 \u0627\u0644\u0623\u062D\u062F \u0627\u0644\u0633\u0627\u0639\u0629 9")
-            return
-        }
-        val hourRegex = Regex("""\u0627\u0644\u0633\u0627\u0639\u0629\s+(\d{1,2})""")
-        val hourMatch = hourRegex.find(cmd)
-        val hour = hourMatch?.groupValues?.get(1)?.toIntOrNull() ?: 9
-
-        val subject = cmd
-            .substringAfter("\u0645\u062D\u0627\u0636\u0631\u0629").ifBlank { cmd.substringAfter("\u062D\u0635\u0629") }
-            .substringBefore("\u064A\u0648\u0645")
-            .trim()
-            .ifBlank { "\u0645\u0627\u062F\u0629" }
-
-        val schedule = loadSchedule()
-        schedule.add(ClassEntry(subject, dayEntry.value, hour, 0))
-        saveSchedule(schedule)
-        respond("\u062A\u0645\u0627\u0645\u060C \u0636\u0641\u062A $subject \u064A\u0648\u0645 ${dayEntry.key} \u0627\u0644\u0633\u0627\u0639\u0629 $hour")
-    }
-
-    private fun getTodaySchedule(): String {
-        val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
-        val classes = loadSchedule().filter { it.dayOfWeek == today }.sortedBy { it.hour }
-        if (classes.isEmpty()) return "\u0645\u0627\u0639\u0646\u062F\u0643 \u0623\u064A \u062D\u0635\u0629 \u0645\u0633\u062C\u0644\u0629 \u0627\u0644\u064A\u0648\u0645"
-        return classes.joinToString("\u060C ") { "${it.subject} \u0627\u0644\u0633\u0627\u0639\u0629 ${it.hour}:00" }
-    }
-
-    private fun getFullSchedule(): String {
-        val classes = loadSchedule()
-        if (classes.isEmpty()) return "\u0645\u0627\u0639\u0646\u062F\u0643 \u0623\u064A \u062C\u062F\u0648\u0644 \u0645\u062D\u0641\u0648\u0638 \u062D\u0627\u0644\u064A\u064B\u0627"
-        return classes.sortedBy { it.dayOfWeek }.joinToString("\u060C ") {
-            "${it.subject} (${weekDayNames[it.dayOfWeek]} ${it.hour}:00)"
-        }
-    }
-
-    // ---------------- Driving mode ----------------
-
-    private var drivingModeOn = false
-
-    private fun toggleDrivingMode(enable: Boolean) {
-        drivingModeOn = enable
-        if (enable) {
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            if (!continuousMode) {
-                enableContinuousMode(startImmediately = true)
-            }
-            respond("\u0648\u0636\u0639 \u0627\u0644\u0633\u0648\u0627\u0642\u0629 \u0645\u0641\u0639\u0651\u0644\u060C \u0631\u0627\u0646\u064A \u0646\u0633\u0645\u0639\u0643 \u0628\u0644\u0627 \u0645\u0627 \u062A\u0644\u0645\u0633 \u0627\u0644\u0634\u0627\u0634\u0629\u060C \u0642\u0648\u0644 \u062C\u0627\u0631\u0641\u0633 \u0648\u0623\u064A \u0623\u0645\u0631")
-        } else {
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            respond("\u062A\u0645 \u0625\u064A\u0642\u0627\u0641 \u0648\u0636\u0639 \u0627\u0644\u0633\u0648\u0627\u0642\u0629")
-        }
-    }
-
-    // ---------------- Event reminders (birthdays, occasions) ----------------
-
-    data class YearlyEvent(val name: String, val month: Int, val day: Int)
-
-    private fun loadEvents(): MutableList<YearlyEvent> {
-        val raw = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("yearly_events_json", "[]") ?: "[]"
-        val list = mutableListOf<YearlyEvent>()
-        try {
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(YearlyEvent(obj.getString("name"), obj.getInt("month"), obj.getInt("day")))
-            }
-        } catch (e: Exception) { }
-        return list
-    }
-
-    private fun saveEvents(list: List<YearlyEvent>) {
-        val arr = JSONArray()
-        list.forEach {
-            val obj = JSONObject()
-            obj.put("name", it.name)
-            obj.put("month", it.month)
-            obj.put("day", it.day)
-            arr.put(obj)
-        }
-        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
-            .putString("yearly_events_json", arr.toString())
-            .apply()
-    }
-
-    private fun handleAddEventReminderCommand(cmd: String) {
-        // \u0627\u0644\u0635\u064A\u063A\u0629: "\u0630\u0643\u0631\u0646\u064A \u0628\u0639\u064A\u062F \u0645\u064A\u0644\u0627\u062F \u0641\u0644\u0627\u0646 \u064A\u0648\u0645 15 \u0634\u0647\u0631 6"
-        val dayMonthRegex = Regex("""\u064A\u0648\u0645\s+(\d{1,2}).*?\u0634\u0647\u0631\s+(\d{1,2})""")
-        val match = dayMonthRegex.find(cmd)
-        if (match == null) {
-            respond("\u0642\u0648\u0644\u064A \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u0630\u0643\u0631\u0646\u064A \u0628\u0639\u064A\u062F \u0645\u064A\u0644\u0627\u062F \u0641\u0644\u0627\u0646 \u064A\u0648\u0645 15 \u0634\u0647\u0631 6")
-            return
-        }
-        val day = match.groupValues[1].toIntOrNull() ?: return
-        val month = match.groupValues[2].toIntOrNull() ?: return
-        val name = cmd.substringBefore("\u064A\u0648\u0645").trim().ifBlank { "\u0645\u0646\u0627\u0633\u0628\u0629" }
-
-        val events = loadEvents()
-        events.add(YearlyEvent(name, month, day))
-        saveEvents(events)
-        scheduleEventCheckAlarm()
-        respond("\u062A\u0645\u0627\u0645\u060C \u0631\u062D \u0646\u0630\u0643\u0631\u0643 \u0628ـ$name \u0643\u0644 $day/$month")
-    }
-
-    private fun listUpcomingEvents(): String {
-        val events = loadEvents()
-        if (events.isEmpty()) return "\u0645\u0627\u0639\u0646\u062F\u0643 \u0623\u064A \u0645\u0646\u0627\u0633\u0628\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 \u062D\u0627\u0644\u064A\u064B\u0627"
-        return events.joinToString("\u060C ") { "${it.name} (${it.day}/${it.month})" }
-    }
-
-    private fun scheduleEventCheckAlarm() {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-        val intent = Intent(this, EventReminderReceiver::class.java)
-        val pending = PendingIntent.getBroadcast(
-            this, 7001, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val calendar = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 9)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            if (before(java.util.Calendar.getInstance())) add(java.util.Calendar.DAY_OF_YEAR, 1)
-        }
-        alarmManager.setRepeating(
-            android.app.AlarmManager.RTC_WAKEUP,
-            calendar.timeInMillis,
-            android.app.AlarmManager.INTERVAL_DAY,
-            pending
-        )
-    }
-
-    // ---------------- Morning Briefing (weather + \u0623\u0642\u0631\u0628 \u0645\u0648\u0639\u062F + \u062E\u0628\u0631) ----------------
-
-    private fun generateMorningBriefing() {
-        if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
-            respond("\u0645\u0627\u0639\u0646\u062F\u064A \u0645\u0648\u0642\u0639 \u062D\u0627\u0644\u064A \u0628\u0627\u0634 \u0646\u062C\u064A\u0628\u0644\u0643 \u0627\u0644\u0637\u0642\u0633\u060C \u062C\u064A\u0628 \u0627\u0644\u0645\u0648\u0642\u0639 \u0623\u0648\u0644\u0627\u064B")
-            return
-        }
-        var weatherPart = "\u0627\u0644\u0637\u0642\u0633: \u063A\u064A\u0631 \u0645\u062A\u0648\u0641\u0631 \u062D\u0627\u0644\u064A\u064B\u0627"
-        var newsPart = ""
-
-        val eventPart = nearestUpcomingEventText()
-
-        fun maybeFinish(weatherDone: Boolean, newsDone: Boolean) {
-            if (weatherDone && newsDone) {
-                val now = java.text.SimpleDateFormat("EEEE d MMMM yyyy - HH:mm", Locale("ar")).format(java.util.Date())
-                val reportBody = buildString {
-                    append("التاريخ:\n$now\n\n")
-                    append("الطقس:\n$weatherPart\n\n")
-                    append("أقرب موعد:\n${eventPart ?: "ماكاين شي موعد قريب مسجّل"}\n\n")
-                    append("آخر الأخبار:\n${newsPart.ifBlank { "غير متوفر حاليًا" }}")
-                }
-                showReportPanel("MORNING BRIEFING", reportBody)
-                val spoken = listOfNotNull(weatherPart, eventPart, newsPart.ifBlank { null })
-                respond(spoken.joinToString("\u060C "))
-            }
-        }
-
-        var weatherDone = false
-        var newsDone = false
-
-        // \u0627\u0644\u0637\u0642\u0633 \u0639\u0628\u0631 Open-Meteo (\u0645\u062C\u0627\u0646\u064A \u0628\u062F\u0648\u0646 \u0645\u0641\u062A\u0627\u062D)
-        val weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lastKnownLat&longitude=$lastKnownLon&current_weather=true"
-        val weatherRequest = Request.Builder().url(weatherUrl).get().build()
-        client.newCall(weatherRequest).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                weatherDone = true
-                runOnUiThread { maybeFinish(weatherDone, newsDone) }
-            }
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val json = JSONObject(response.body?.string() ?: "")
-                    val current = json.getJSONObject("current_weather")
-                    val temp = current.getDouble("temperature")
-                    weatherPart = "\u0627\u0644\u0637\u0642\u0633 \u062D\u0627\u0644\u064A\u064B\u0627 ${temp.toInt()}\u00B0"
-                } catch (e: Exception) { }
-                weatherDone = true
-                runOnUiThread { maybeFinish(weatherDone, newsDone) }
-            }
-        })
-
-        // \u062E\u0628\u0631 \u0648\u0627\u062D\u062F \u0639\u0628\u0631 RSS
-        val rssUrl = "https://www.aljazeera.net/aljazeerarss/xml"
-        val rssRequest = Request.Builder().url(rssUrl).get().build()
-        client.newCall(rssRequest).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                newsDone = true
-                runOnUiThread { maybeFinish(weatherDone, newsDone) }
-            }
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val body = response.body?.string() ?: ""
-                    val firstItem = body.substringAfter("<item>").substringBefore("</item>")
-                    val title = firstItem.substringAfter("<title>").substringBefore("</title>")
-                        .replace("<![CDATA[", "").replace("]]>", "").trim()
-                    if (title.isNotBlank()) {
-                        newsPart = "\u0622\u062E\u0631 \u0627\u0644\u0623\u062E\u0628\u0627\u0631: $title"
-                    }
-                } catch (e: Exception) { }
-                newsDone = true
-                runOnUiThread { maybeFinish(weatherDone, newsDone) }
-            }
-        })
-    }
-
-    private fun nearestUpcomingEventText(): String? {
-        val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
-        val todayClasses = loadSchedule().filter { it.dayOfWeek == today }.sortedBy { it.hour }
-        if (todayClasses.isNotEmpty()) {
-            val next = todayClasses.first()
-            return "\u0623\u0642\u0631\u0628 \u0645\u0648\u0639\u062F \u0627\u0644\u064A\u0648\u0645: ${next.subject} \u0627\u0644\u0633\u0627\u0639\u0629 ${next.hour}:00"
-        }
-        return null
-    }
-
-    private fun scheduleMorningBriefingAlarm() {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-        val intent = Intent(this, MorningBriefingReceiver::class.java)
-        val pending = PendingIntent.getBroadcast(
-            this, 7002, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val calendar = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 7)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            if (before(java.util.Calendar.getInstance())) add(java.util.Calendar.DAY_OF_YEAR, 1)
-        }
-        alarmManager.setRepeating(
-            android.app.AlarmManager.RTC_WAKEUP,
-            calendar.timeInMillis,
-            android.app.AlarmManager.INTERVAL_DAY,
-            pending
-        )
-    }
-
-    // ---------------- Traffic Insight (\u0646\u0633\u062E\u0629 \u0648\u0627\u0642\u0639\u064A\u0629 \u0645\u062C\u0627\u0646\u064A\u0629) ----------------
-
-    private fun handleTrafficInsightCommand(cmd: String) {
-        if (GOOGLE_MAPS_API_KEY.isBlank()) {
-            respond("\u0647\u0627\u0644\u0627 \u062E\u0627\u0635\u064A\u0629 \u062A\u062D\u062A\u0627\u062C \u0645\u0641\u062A\u0627\u062D Google Maps API (\u0645\u062C\u0627\u0646\u064A \u062D\u062A\u0649 \u062D\u062F \u0645\u0639\u064A\u0651\u0646 \u0634\u0647\u0631\u064A\u064B\u0627)\u060C \u062F\u0648\u0646\u0647 \u0646\u0642\u062F\u0631 \u0646\u0639\u0637\u064A\u0643 \u0641\u0642\u0637 \u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0627\u0644\u062A\u0642\u0631\u064A\u0628\u064A\u0629")
-            return
-        }
-        // \u0646\u0633\u062A\u0639\u0645\u0644 \u0623\u0642\u0631\u0628 \u0648\u062C\u0647\u0629 \u0645\u062D\u0641\u0648\u0638\u0629 (\u0627\u0644\u0645\u0646\u0632\u0644/\u0627\u0644\u0639\u0645\u0644/\u0627\u0644\u062C\u0627\u0645\u0639\u0629) \u062D\u0633\u0628 \u0645\u0627 \u0630\u064F\u0643\u0631 \u0641\u064A \u0627\u0644\u0623\u0645\u0631\u060C \u0648\u0625\u0644\u0627 \u0646\u0637\u0644\u0628 \u0627\u0644\u0645\u0646\u0632\u0644 \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u064B\u0627
-        val prefsKey = when {
-            cmd.contains("\u0627\u0644\u062C\u0627\u0645\u0639\u0629") -> "waypoint_university"
-            cmd.contains("\u0627\u0644\u0639\u0645\u0644") -> "waypoint_work"
-            else -> "waypoint_home"
-        }
-        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-        val destLat = prefs.getFloat("${prefsKey}_lat", Float.NaN)
-        val destLon = prefs.getFloat("${prefsKey}_lon", Float.NaN)
-        if (destLat.isNaN() || destLon.isNaN() || (lastKnownLat == 0.0 && lastKnownLon == 0.0)) {
-            respond("\u0644\u0627\u0632\u0645 \u062A\u062D\u062F\u062F \u0627\u0644\u0648\u062C\u0647\u0629 \u0648\u0645\u0648\u0642\u0639\u0643 \u0627\u0644\u062D\u0627\u0644\u064A \u0623\u0648\u0644\u0627\u064B \u0645\u0646 \u0635\u0641\u062D\u0629 MAP")
-            return
-        }
-
-        val url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
-                "?origins=$lastKnownLat,$lastKnownLon&destinations=$destLat,$destLon" +
-                "&departure_time=now&traffic_model=best_guess&key=$GOOGLE_MAPS_API_KEY"
-        val request = Request.Builder().url(url).get().build()
-
-        respond("\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642...")
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A\u0634 \u0646\u062C\u064A\u0628 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u062F\u0627\u0628\u0627") }
-            }
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val json = JSONObject(response.body?.string() ?: "")
-                    val element = json.getJSONArray("rows").getJSONObject(0)
-                        .getJSONArray("elements").getJSONObject(0)
-                    val normalDuration = element.getJSONObject("duration").getString("text")
-                    val trafficDuration = element.optJSONObject("duration_in_traffic")?.getString("text")
-                        ?: normalDuration
-                    runOnUiThread {
-                        respond("\u0648\u0642\u062A \u0627\u0644\u0631\u062D\u0644\u0629 \u0627\u0644\u0639\u0627\u062F\u064A $normalDuration\u060C \u0645\u0639 \u0627\u0644\u0632\u062D\u0645\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u062D\u0648\u0627\u0644\u064A $trafficDuration")
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A\u0634 \u0646\u062C\u064A\u0628 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u062F\u0627\u0628\u0627") }
-                }
-            }
-        })
-    }
-
-    // ---------------- Fun facts ----------------
-
-    private val funFacts = listOf(
-        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0635\u062D\u0631\u0627\u0621 \u0627\u0644\u062C\u0632\u0627\u0626\u0631 (\u0627\u0644\u0635\u062D\u0631\u0627\u0621 \u0627\u0644\u0643\u0628\u0631\u0649) \u062A\u063A\u0637\u064A \u0623\u0643\u062A\u0631 \u0645\u0646 80% \u0645\u0646 \u0645\u0633\u0627\u062D\u0629 \u0627\u0644\u0628\u0644\u0627\u062F.",
-        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0639\u0633\u0644 \u0645\u0627 \u064A\u0641\u0633\u062F\u0634 \u0623\u0628\u062F\u064B\u0627\u060C \u062D\u062A\u0649 \u0628\u0639\u062F \u0622\u0644\u0627\u0641 \u0627\u0644\u0633\u0646\u064A\u0646.",
-        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0642\u0644\u0628 \u0627\u0644\u0628\u0634\u0631\u064A \u064A\u062F\u0642 \u062D\u0648\u0627\u0644\u064A 100 \u0623\u0644\u0641 \u0645\u0631\u0629 \u0628\u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0648\u0627\u062D\u062F.",
-        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0623\u062E\u0637\u0628\u0648\u0637 \u0639\u0646\u062F\u0647 \u062B\u0644\u0627\u062B\u0629 \u0642\u0644\u0648\u0628 \u0648\u062F\u0645\u0647 \u0644\u0648\u0646\u0647 \u0623\u0632\u0631\u0642.",
-        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u0627\u0644\u0636\u0648\u0621 \u0645\u0646 \u0627\u0644\u0634\u0645\u0633 \u064A\u0648\u0635\u0644 \u0644\u0644\u0623\u0631\u0636 \u0628\u062D\u0648\u0627\u0644\u064A 8 \u062F\u0642\u0627\u064A\u0642 \u0628\u0633.",
-        "\u0647\u0644 \u062A\u0639\u0631\u0641\u061F \u062C\u0628\u0644 \u0637\u0648\u0628\u0642\u0627\u0644 \u0628\u0627\u0644\u0645\u063A\u0631\u0628 \u0647\u0648 \u0623\u0639\u0644\u0649 \u0642\u0645\u0629 \u0628\u0634\u0645\u0627\u0644 \u0623\u0641\u0631\u064A\u0642\u064A\u0627."
-    )
-
-    // ---------------- Suggestions ----------------
-
-    private fun suggestDrawing(): String {
-        val ideas = listOf(
-            "\u0627\u0631\u0633\u0645 \u0645\u0646\u0638\u0631 \u0637\u0628\u064A\u0639\u064A \u0641\u064A\u0647 \u062C\u0628\u0627\u0644 \u0648\u0628\u062D\u0631",
-            "\u062C\u0631\u0628 \u062A\u0631\u0633\u0645 \u0628\u0648\u0631\u062A\u0631\u064A\u0647 \u0644\u0634\u062E\u0635 \u0642\u0631\u064A\u0628 \u0645\u0646\u0643",
-            "\u0627\u0631\u0633\u0645 \u062D\u064A\u0648\u0627\u0646 \u0623\u0644\u064A\u0641 \u0628\u0623\u0633\u0644\u0648\u0628 \u0643\u0631\u062A\u0648\u0646\u064A",
-            "\u062C\u0631\u0628 \u0631\u0633\u0645 \u0645\u062F\u064A\u0646\u0629 \u062E\u064A\u0627\u0644\u064A\u0629 \u0645\u0646 \u062E\u064A\u0627\u0644\u0643",
-            "\u0627\u0631\u0633\u0645 \u0644\u0648\u062D\u0629 \u062A\u062C\u0631\u064A\u062F\u064A\u0629 \u0628\u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u064A\u0644\u064A \u0628\u062A\u062D\u0628\u0647\u0627"
-        )
-        return "\u0641\u0643\u0631\u0629 \u0631\u0633\u0645\u0629 \u0627\u0644\u064A\u0648\u0645: ${ideas.random()}"
-    }
-
-    private fun suggestBreakfast(): String {
-        val ideas = listOf(
-            "\u0628\u064A\u0636 \u0645\u0639 \u0632\u0639\u062A\u0631 \u0648\u0632\u064A\u062A \u0632\u064A\u062A\u0648\u0646 \u0648\u062E\u0628\u0632 \u0637\u0627\u0632\u0629",
-            "\u0641\u0648\u0644 \u0645\u062F\u0645\u0633 \u0645\u0639 \u062E\u0636\u0631\u0629 \u0648\u0644\u064A\u0645\u0648\u0646",
-            "\u0644\u0628\u0646\u0629 \u0645\u0639 \u062E\u064A\u0627\u0631 \u0648\u0637\u0645\u0627\u0637\u0645",
-            "\u0645\u0646\u0627\u0642\u064A\u0634 \u0632\u0639\u062A\u0631 \u0623\u0648 \u062C\u0628\u0646\u0629",
-            "\u0634\u0643\u0634\u0648\u0643\u0629 \u0628\u0627\u0644\u0628\u064A\u0636 \u0648\u0627\u0644\u0628\u0646\u062F\u0648\u0631\u0629"
-        )
-        return "\u0627\u0642\u062A\u0631\u0627\u062D \u0641\u0637\u0648\u0631 \u0627\u0644\u064A\u0648\u0645: ${ideas.random()}"
-    }
-
-    // ---------------- Distance between cities ----------------
-    // \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062F\u0646 \u0627\u0646\u062A\u0642\u0644\u062A \u0644\u0645\u0644\u0641 CityCoordinates.kt \u0645\u0646\u0641\u0635\u0644 (\u0644\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0643\u0648\u062F)
-
-    private fun handleDistanceQuery(cmd: String) {
-        val regex = Regex("""\u0645\u0646\s+(\S+)\s+(?:\u0627\u0644\u0649|\u0625\u0644\u0649)\s+(\S+)""")
-        val match = regex.find(cmd)
-        if (match == null) {
-            respond("\u0642\u0644\u064A \u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0628\u0647\u0627\u0644\u0635\u064A\u063A\u0629: \u0643\u0645 \u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 \u062F\u0645\u0634\u0642 \u0627\u0644\u0649 \u062D\u0644\u0628")
-            return
-        }
-        val cityA = match.groupValues[1]
-        val cityB = match.groupValues[2]
-
-        if (GOOGLE_MAPS_API_KEY.isNotBlank()) {
-            respond("\u0628\u062D\u0633\u0628...")
-            askGoogleDistance(cityA, cityB)
-        } else {
-            respond(calculateDistanceOffline(cityA, cityB))
-        }
-    }
-
-    private fun askGoogleDistance(cityA: String, cityB: String) {
-        val originEnc = java.net.URLEncoder.encode(cityA, "UTF-8")
-        val destEnc = java.net.URLEncoder.encode(cityB, "UTF-8")
-        val url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
-                "?origins=$originEnc&destinations=$destEnc&key=$GOOGLE_MAPS_API_KEY"
-        val request = Request.Builder().url(url).get().build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val responseText = response.body?.string() ?: ""
-                    val json = JSONObject(responseText)
-                    val status = json.optString("status")
-                    if (status != "OK") {
-                        runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
-                        return
-                    }
-                    val element = json.getJSONArray("rows")
-                        .getJSONObject(0)
-                        .getJSONArray("elements")
-                        .getJSONObject(0)
-                    val elementStatus = element.optString("status")
-                    if (elementStatus != "OK") {
-                        runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
-                        return
-                    }
-                    val distanceText = element.getJSONObject("distance").getString("text")
-                    val durationText = element.getJSONObject("duration").getString("text")
-                    runOnUiThread {
-                        respond("\u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 $cityA \u0627\u0644\u0649 $cityB \u062D\u0648\u0627\u0644\u064A $distanceText \u0628\u0627\u0644\u0633\u064A\u0627\u0631\u0629\u060C \u0648\u0648\u0642\u062A \u0627\u0644\u0631\u062D\u0644\u0629 \u062A\u0642\u0631\u064A\u0628\u064B\u0627 $durationText")
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread { respond(calculateDistanceOffline(cityA, cityB)) }
-                }
-            }
-        })
-    }
-
-    private fun calculateDistanceOffline(cityA: String, cityB: String): String {
-        val coordA = CityCoordinates.coordinates[cityA]
-        val coordB = CityCoordinates.coordinates[cityB]
-        if (coordA == null || coordB == null) {
-            return "\u0644\u0644\u0623\u0633\u0641 \u0645\u0627 \u0639\u0646\u062F\u064A \u0625\u062D\u062F\u0627\u062B\u064A\u0627\u062A \u0644\u0647\u0627\u064A \u0627\u0644\u0645\u062F\u064A\u0646\u0629 \u062D\u0627\u0644\u064A\u064B\u0627"
-        }
-        val distanceKm = haversine(coordA.first, coordA.second, coordB.first, coordB.second)
-        return "\u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0645\u0646 $cityA \u0627\u0644\u0649 $cityB \u062D\u0648\u0627\u0644\u064A ${distanceKm.toInt()} \u0643\u0645 (\u062E\u0637 \u0645\u0633\u062A\u0642\u064A\u0645 \u062A\u0642\u0631\u064A\u0628\u064A)"
-    }
-
-    private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val earthRadiusKm = 6371.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2).pow(2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return earthRadiusKm * c
-    }
-
-    // ---------------- Output helpers ----------------
-
-    private fun respond(text: String) {
-        log("\u062C\u0627\u0631\u0641\u0633: $text")
-        speechRecognizer?.stopListening()
-
-        // \u0644\u0645\u062D\u0631\u0643\u0627\u062A TTS \u062D\u062F \u0623\u0642\u0635\u0649 \u0644\u0637\u0648\u0644 \u0627\u0644\u0646\u0635 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621 \u0627\u0644\u0648\u0627\u062D\u062F \u2014 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 (\u0645\u062B\u0644 \u0631\u062F\u0648\u062F Gemini) \u0643\u0627\u0646 \u064A\u062A\u0642\u0637\u0639 \u0628\u0635\u0645\u062A. \u0646\u0642\u0633\u0651\u0645\u0647 \u0644\u062C\u0645\u0644 \u0648\u0646\u0631\u0633\u0644\u0647\u0645 \u0648\u0627\u062D\u062F \u0628\u0648\u0627\u062D\u062F
-        val maxLen = try {
-            TextToSpeech.getMaxSpeechInputLength().takeIf { it > 0 } ?: 3800
-        } catch (e: Exception) {
-            3800
-        }
-        val chunks = splitTextForSpeech(text, maxLen)
-        val utteranceIds = chunks.indices.map { "jarvis_${System.currentTimeMillis()}_$it" }
-        lastQueuedUtteranceId = utteranceIds.lastOrNull()
-        chunks.forEachIndexed { index, chunk ->
-            val mode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-            tts.speak(chunk, mode, null, utteranceIds[index])
-        }
-    }
-
-    // \u064A\u0642\u0633\u0651\u0645 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 \u0639\u0644\u0649 \u062D\u062F\u0648\u062F \u0627\u0644\u062C\u0645\u0644 \u0642\u062F\u0631 \u0627\u0644\u0625\u0645\u0643\u0627\u0646 (\u0645\u0627 \u064A\u0642\u0637\u0639\u0634 \u0641\u064A \u0646\u0635 \u0643\u0644\u0645\u0629) \u0628\u062F\u0648\u0646 \u0645\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 maxLen
-    private fun splitTextForSpeech(text: String, maxLen: Int): List<String> {
-        if (text.length <= maxLen) return listOf(text)
-        val sentences = text.split(Regex("(?<=[.!?\u061F\u060C])\\s+"))
-        val chunks = mutableListOf<String>()
-        val current = StringBuilder()
-        for (sentence in sentences) {
-            if (current.length + sentence.length + 1 > maxLen) {
-                if (current.isNotEmpty()) {
-                    chunks.add(current.toString().trim())
-                    current.clear()
-                }
-                if (sentence.length > maxLen) {
-                    // \u062C\u0645\u0644\u0629 \u0648\u0627\u062D\u062F\u0629 \u0623\u0637\u0648\u0644 \u0645\u0646 maxLen \u0646\u0641\u0633\u0647\u0627: \u0646\u0642\u0637\u0639\u0647\u0627 \u0642\u0633\u0631\u064A\u0627\u064B
-                    var start = 0
-                    while (start < sentence.length) {
-                        val end = minOf(start + maxLen, sentence.length)
-                        chunks.add(sentence.substring(start, end))
-                        start = end
-                    }
-                } else {
-                    current.append(sentence)
-                }
-            } else {
-                current.append(sentence).append(" ")
-            }
-        }
-        if (current.isNotEmpty()) chunks.add(current.toString().trim())
-        return chunks.filter { it.isNotBlank() }
-    }
-
-    private fun log(text: String) {
-        logText.append("\n\n$text")
-    }
-
-    // \u064A\u062A\u0645 \u0627\u0633\u062A\u062F\u0639\u0627\u0624\u0647 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0645\u0644\u064A \u064A\u0642\u062A\u0631\u0628 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u062E\u0627\u0635\u064A\u0629 \u0627\u0644\u0647\u0627\u062A\u0641 \u0645\u0646 \u0628\u0637\u0627\u0642\u0629 NFC (\u0628\u0641\u0636\u0644 enableForegroundDispatch)
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        val tagContent = nfcHelper.readTagFromIntent(intent)
-        if (tagContent != null) {
-            respond("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0628\u0637\u0627\u0642\u0629: $tagContent")
-        }
-        handleWakeServiceLaunch(intent)
-    }
-
-    /** لو التطبيق تفتح لأن خدمة الاستماع الخلفي سمعت كلمة "جارفس"، نبدأ نسمع الأمر الحقيقي فورًا */
-    private fun handleWakeServiceLaunch(intent: Intent?) {
-        if (intent?.getBooleanExtra("FROM_WAKE_SERVICE", false) == true) {
-            intent.removeExtra("FROM_WAKE_SERVICE")
-            if (::jarvisDial.isInitialized) {
-                jarvisDial.triggerWakeBurst()
-            }
-            retryHandler.postDelayed({ startListening() }, 350L)
-        }
-        if (intent?.getBooleanExtra("SHOW_MORNING_BRIEFING", false) == true) {
-            intent.removeExtra("SHOW_MORNING_BRIEFING")
-            retryHandler.postDelayed({ generateMorningBriefing() }, 600L)
-        }
-    }
-
-    private fun setupBackgroundListeningToggle() {
-        val button = findViewById<TextView>(R.id.sysBackgroundListenButton)
-        val isServiceOn = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getBoolean("background_listening_on", false)
-        button.text = if (isServiceOn) "BACKGROUND LISTENING: ON" else "BACKGROUND LISTENING: OFF"
-        if (isServiceOn) {
-            startWakeServiceIfPermitted()
-        }
-        button.setOnClickListener {
-            val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            val currentlyOn = prefs.getBoolean("background_listening_on", false)
-            if (currentlyOn) {
-                stopService(Intent(this, JarvisWakeService::class.java))
-                prefs.edit().putBoolean("background_listening_on", false).apply()
-                button.text = "BACKGROUND LISTENING: OFF"
-                respond("أوقفت الاستماع في الخلفية")
-            } else {
-                prefs.edit().putBoolean("background_listening_on", true).apply()
-                button.text = "BACKGROUND LISTENING: ON"
-                startWakeServiceIfPermitted()
-            }
-        }
-    }
-
-    private fun startWakeServiceIfPermitted() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            respond("محتاج صلاحية الميكروفون باش نفعّل الاستماع الخلفي")
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9021
-            )
-        }
-        val serviceIntent = Intent(this, JarvisWakeService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
-        respond("فعّلت الاستماع في الخلفية، قل جارفس في أي وقت")
-    }
-
-    // \u0632\u0631 \u0627\u0644\u0623\u0631\u0628\u0648\u062F\u0632/\u0627\u0644\u0633\u0645\u0627\u0639\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A\u0629: 3 \u0636\u063A\u0637\u0627\u062A \u0633\u0631\u064A\u0639\u0629 \u062E\u0644\u0627\u0644 \u062B\u0627\u0646\u064A\u0629 \u0648\u0627\u062D\u062F\u0629 \u062A\u0628\u062F\u0623 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639
-    private var headsetPressCount = 0
-    private var lastHeadsetPressTime = 0L
-
-    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
-        if (keyCode == android.view.KeyEvent.KEYCODE_HEADSETHOOK ||
-            keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-        ) {
-            val now = System.currentTimeMillis()
-            if (now - lastHeadsetPressTime > 1200L) {
-                headsetPressCount = 0
-            }
-            headsetPressCount++
-            lastHeadsetPressTime = now
-            if (headsetPressCount >= 3) {
-                headsetPressCount = 0
-                if (!continuousMode) {
-                    enableContinuousMode()
-                } else {
-                    startListening()
-                }
-            }
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // \u0648\u0642\u0641 \u0627\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u0648\u0627\u0644\u0646\u0637\u0642 \u0648\u062D\u0631\u0643\u0629 HUD \u0645\u0644\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629 (\u064A\u0648\u0641\u0631 \u0628\u0637\u0627\u0631\u064A\u0629 \u0648\u064A\u0645\u0646\u0639 \u0627\u0644\u0645\u0627\u064A\u0643 \u064A\u0628\u0642\u0649 \u062E\u0627\u062F\u0645)
-        retryHandler.removeCallbacksAndMessages(null)
-        speechRecognizer?.stopListening()
-        tts.stop()
-        if (::miniMapView.isInitialized) {
-            miniMapView.onPause()
-            miniMapView.pauseTimers()
-        }
-        if (::miniBrowserView.isInitialized) {
-            miniBrowserView.onPause()
-            miniBrowserView.pauseTimers()
-        }
-        stopPerfMonitor()
-        nfcHelper.disableForegroundDispatch()
-        geoCompass.stop()
-        if (::jarvisDial.isInitialized) {
-            jarvisDial.pauseAnimation()
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (::jarvisDial.isInitialized) {
-            jarvisDial.resumeAnimation()
-        }
-        if (::miniMapView.isInitialized) {
-            miniMapView.onResume()
-            miniMapView.resumeTimers()
-        }
-        if (::miniBrowserView.isInitialized) {
-            miniBrowserView.onResume()
-            miniBrowserView.resumeTimers()
-        }
-        startPerfMonitor()
-        nfcHelper.enableForegroundDispatch()
-        geoCompass.start()
-        // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
-        if (continuousMode) {
-            startListening()
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        retryHandler.removeCallbacksAndMessages(null)
-        clockHandler.removeCallbacksAndMessages(null)
-        if (::miniMapView.isInitialized) {
-            miniMapView.destroy()
-        }
-        if (::miniBrowserView.isInitialized) {
-            miniBrowserView.destroy()
-        }
-        tts.shutdown()
-        stopMusic()
-        speechRecognizer?.destroy()
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
-            jarvisGeologyModule.onPhotoCaptured()
-        }
-    }
-}
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootHud"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0F14">
+
+    <!-- Hidden compatibility views used internally by MainActivity.kt -->
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/logText"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/statusDot"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone" />
+
+    <!-- Top bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="70dp"
+        android:paddingEnd="16dp"
+        android:background="#10151B">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="J.A.R.V.I.S."
+            android:textColor="#8DEFFF"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.15" />
+
+        <TextView
+            android:id="@+id/topClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:textColor="#E8FFFF"
+            android:textSize="13sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- Left sidebar navigation -->
+    <LinearLayout
+        android:id="@+id/sidebarNav"
+        android:layout_width="72dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:orientation="vertical"
+        android:paddingTop="52dp"
+        android:background="#10151B">
+
+        <TextView
+            android:id="@+id/navHome"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="HOME"
+            android:textColor="#8DEFFF"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_home"
+            android:drawablePadding="4dp"
+            android:background="#16232A"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navMap"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="MAP"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_map"
+            android:drawablePadding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navLab"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="LAB"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_lab"
+            android:drawablePadding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navSys"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="SYS"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_sys"
+            android:drawablePadding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navNet"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="NET"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_net"
+            android:drawablePadding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navAi"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="AI"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_ai"
+            android:drawablePadding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/navMore"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:gravity="center"
+            android:text="MORE"
+            android:textColor="#5C7A82"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:drawableTop="@drawable/ic_nav_more"
+            android:drawablePadding="4dp"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Live status/log panel (mustawa7 min alHUD al-marja3i: dot + label + ticker) -->
+    <LinearLayout
+        android:id="@+id/hudStatusPanel"
+        android:layout_width="188dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="50dp"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#10151B">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/hudStatusDot"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/status_dot" />
+
+            <TextView
+                android:id="@+id/hudStatusLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="NOMINAL"
+                android:textColor="#8DEFFF"
+                android:textSize="9sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.03" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/hudLogScroll"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none">
+
+            <TextView
+                android:id="@+id/hudLogTicker"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#4E7A82"
+                android:textSize="7.5sp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="1dp" />
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- Content area (to the right of sidebar, below top bar) -->
+    <FrameLayout
+        android:id="@+id/contentArea"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="72dp"
+        android:layout_marginTop="44dp">
+
+        <!-- HOME panel: the existing Jarvis dial -->
+        <FrameLayout
+            android:id="@+id/homePanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible">
+
+            <FrameLayout
+                android:id="@+id/micButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clickable="true"
+                android:focusable="true">
+
+                <com.jarvis.assistant.JarvisDialView
+                    android:id="@+id/jarvisDial"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <TextView
+                    android:id="@+id/micIcon"
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <!-- \u062E\u0631\u064A\u0637\u0629 \u0645\u0635\u063A\u0631\u0629 \u062F\u0627\u0626\u0631\u064A\u0629 \u062A\u062F\u0648\u0631 \u0628\u0623\u0633\u0644\u0648\u0628 \u0628\u0644\u0648\u0628\u0631\u0646\u062A\u060C \u062A\u0648\u0631\u064A \u0645\u0648\u0642\u0639\u0643 \u0627\u0644\u062D\u0642\u064A\u0642\u064A \u062A\u062D\u062A \u0627\u0644\u0640 HUD -->
+            <!-- زر استماع صريح: يعمل في أي وقت، حتى أثناء كلام جارفس (يقاطعه ويبدأ الاستماع فورًا) -->
+            <TextView
+                android:id="@+id/listenButton"
+                android:layout_width="58dp"
+                android:layout_height="58dp"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="130dp"
+                android:gravity="center"
+                android:text="&#127897;&#65039;"
+                android:textSize="24sp"
+                android:background="@drawable/listen_button_bg"
+                android:elevation="4dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <WebView
+                android:id="@+id/miniMapView"
+                android:layout_width="match_parent"
+                android:layout_height="105dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:layout_marginBottom="6dp"
+                android:background="@android:color/transparent" />
+
+            <!-- \u0645\u062A\u0635\u0641\u062D \u0635\u063A\u064A\u0631 \u0645\u062F\u0645\u062C \u0644\u0644\u0645\u0648\u0627\u0642\u0639\u060C \u0645\u062E\u0641\u064A \u0628\u0634\u0643\u0644 \u0627\u0641\u062A\u0631\u0627\u0636\u064A\u060C \u064A\u0638\u0647\u0631 \u0628\u062F\u0644 \u0627\u0644\u062E\u0631\u064A\u0637\u0629 \u0639\u0646\u062F \u0641\u062A\u062D \u0645\u0648\u0642\u0639 -->
+            <WebView
+                android:id="@+id/miniBrowserView"
+                android:layout_width="match_parent"
+                android:layout_height="105dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:layout_marginBottom="6dp"
+                android:visibility="gone"
+                android:background="@android:color/transparent" />
+        </FrameLayout>
+
+        <!-- MAP panel: navigation mode (location + reverse geocode + waypoints) -->
+        <LinearLayout
+            android:id="@+id/mapPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="LOCATION DATA"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:background="@drawable/hud_glow_card">
+
+                        <TextView
+                            android:id="@+id/mapLat"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="LAT: --"
+                            android:textColor="#D7FBFF"
+                            android:textSize="15sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapLon"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="LON: --"
+                            android:textColor="#D7FBFF"
+                            android:textSize="15sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapNeighborhood"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="الحي: --"
+                            android:textColor="#A7EAF2"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapCity"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="البلدية: --"
+                            android:textColor="#A7EAF2"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapProvince"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="الولاية / البلد: --"
+                            android:textColor="#A7EAF2"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/mapStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="TAP TO REQUEST LOCATION"
+                            android:textColor="#5C7A82"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:clickable="true"
+                            android:focusable="true" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/mapOpenExternalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:padding="14dp"
+                        android:gravity="center"
+                        android:text="OPEN IN MAPS"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.08"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/map3dToggleButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="6dp"
+                            android:padding="14dp"
+                            android:gravity="center"
+                            android:text="3D VIEW: OFF"
+                            android:textColor="#8DEFFF"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:background="@drawable/hud_glow_card"
+                            android:clickable="true"
+                            android:focusable="true" />
+
+                        <TextView
+                            android:id="@+id/mapSaveOfflineButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:padding="14dp"
+                            android:gravity="center"
+                            android:text="SAVE VIEW"
+                            android:textColor="#8DEFFF"
+                            android:textSize="10sp"
+                            android:fontFamily="monospace"
+                            android:background="@drawable/hud_glow_card"
+                            android:clickable="true"
+                            android:focusable="true" />
+                    </LinearLayout>
+
+                    <!-- خرائط محفوظة متعددة: كل وحدة نقطة يمكن التنقل إليها فورًا -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="SAVED MAPS"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:id="@+id/savedMapsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:id="@+id/addMapButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:gravity="center"
+                        android:text="+ ADD MAP (الموقع الحالي)"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <!-- وضع الملاحة: وجهات سريعة (منزل / عمل / جامعة) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="22dp"
+                        android:text="NAVIGATION"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <TextView
+                        android:id="@+id/navHomeRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:padding="14dp"
+                        android:text="HOME: NOT SET (TAP TO SET)"
+                        android:textColor="#D7FBFF"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/navWorkRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:text="WORK: NOT SET (TAP TO SET)"
+                        android:textColor="#D7FBFF"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/navUniversityRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:text="UNIVERSITY: NOT SET (TAP TO SET)"
+                        android:textColor="#D7FBFF"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <!-- نقاط مخصصة يضيفها المستخدم يدويًا (Waypoints) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:text="WAYPOINTS"
+                        android:textColor="#76E8F5"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:id="@+id/waypointsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:id="@+id/addWaypointButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:padding="14dp"
+                        android:gravity="center"
+                        android:text="+ ADD WAYPOINT (الموقع الحالي)"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- LAB panel: hologram design feature + saved designs -->
+        <LinearLayout
+            android:id="@+id/labPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="DESIGN LAB"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/labOpenButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="\u0642\u0648\u0644 \u0628\u0635\u0648\u062A\u0643: \u062C\u0627\u0631\u0641\u0633 \u0635\u0645\u0645\u0644\u064A ... (\u0623\u0648 \u0627\u0636\u063A\u0637 \u0647\u0646\u0627 \u0644\u0641\u062A\u062D DESIGN LAB)"
+                android:textColor="#5C7A82"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:id="@+id/labProjectsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="NO PROJECTS YET"
+                    android:textColor="#8AA0A8"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="8dp" />
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- SYS panel: real device controls -->
+        <LinearLayout
+            android:id="@+id/sysPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SYSTEM"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/sysBattery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="BATTERY: --%"
+                android:textColor="#D7FBFF"
+                android:textSize="14sp"
+                android:fontFamily="monospace" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="24dp">
+
+                <TextView
+                    android:id="@+id/sysFlashToggle"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="FLASH"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysCameraButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="CAMERA"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysSettingsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="SETTINGS"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp">
+
+                <TextView
+                    android:id="@+id/sysBluetoothButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="BLUETOOTH"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysDefenseButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="DEFENSE"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysScanButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="SCAN"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp">
+
+                   <TextView
+                    android:id="@+id/sysIrButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="IR REMOTE"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysBackupButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="BACKUP"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysRestoreButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="RESTORE"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp">
+
+                <TextView
+                    android:id="@+id/sysVoiceGenderButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="VOICE: MALE"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/sysLangButton"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="LANG: ARABIC"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/sysBackgroundListenButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="BACKGROUND LISTENING: OFF"
+                android:textColor="#A7EAF2"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.05"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- ملعب صوت الرجالي: 3 أشرطة تحكم حية (عمق / خشونة / بحة) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="VOICE TUNING (MALE)"
+                    android:textColor="#76E8F5"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.08" />
+
+                <TextView
+                    android:id="@+id/sysDepthLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="العمق (DEPTH): 40"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <SeekBar
+                    android:id="@+id/sysDepthSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="26dp"
+                    android:max="100"
+                    android:progress="40"
+                    android:progressDrawable="@drawable/voice_slider_track"
+                    android:thumb="@drawable/voice_slider_thumb" />
+
+                <TextView
+                    android:id="@+id/sysRoughnessLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="الخشونة (ROUGHNESS): 45"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <SeekBar
+                    android:id="@+id/sysRoughnessSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="26dp"
+                    android:max="100"
+                    android:progress="45"
+                    android:progressDrawable="@drawable/voice_slider_track"
+                    android:thumb="@drawable/voice_slider_thumb" />
+
+                <TextView
+                    android:id="@+id/sysRaspLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="البحة (RASP): 0"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <SeekBar
+                    android:id="@+id/sysRaspSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="26dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/voice_slider_track"
+                    android:thumb="@drawable/voice_slider_thumb" />
+
+                <TextView
+                    android:id="@+id/sysVoicePreviewButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:padding="10dp"
+                    android:gravity="center"
+                    android:text="PREVIEW VOICE"
+                    android:textColor="#8DEFFF"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.06"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/sysStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text=""
+                android:textColor="#5C7A82"
+                android:textSize="10sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- NET panel: honestly marked unavailable -->
+        <LinearLayout
+            android:id="@+id/netPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NETWORK STATUS"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:id="@+id/netConnectionType"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CONNECTION: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/netIpAddress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="IP: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/netWifiName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="WIFI: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/netBluetoothStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="BLUETOOTH: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/netRefreshButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:padding="14dp"
+                android:gravity="center"
+                android:text="REFRESH"
+                android:textColor="#8DEFFF"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- AI panel: Gemini-backed suggestions -->
+        <LinearLayout
+            android:id="@+id/aiPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="OPERATOR PROFILE"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <TextView
+                    android:id="@+id/profileName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="NAME: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profileEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="EMAIL: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profilePhone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="PHONE: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profileEmergencyContact"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="EMERGENCY CONTACT: --"
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/profileEditButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="EDIT PROFILE"
+                    android:textColor="#8DEFFF"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.06"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <!-- لوحة القيادة التنفيذية: ملخص فوري لأداء اليوم -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="EXECUTIVE DASHBOARD"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/hud_glow_card">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/dashboardMood"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="NOMINAL"
+                        android:textColor="#FFB43C"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.05"
+                        android:layout_marginEnd="12dp" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/dashboardDeadline"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="أقرب موعد: --"
+                            android:textColor="#D7FBFF"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/dashboardStudy"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="جلسات تركيز اليوم: 0"
+                            android:textColor="#D7FBFF"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/dashboardProductivity"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="الإنتاجية: 0%"
+                            android:textColor="#D7FBFF"
+                            android:textSize="11sp"
+                            android:fontFamily="monospace" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- شات جانبي نصي: بديل عن الصوت لما التعرف الصوتي بالعربي ما يفهمش مليح -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="TEXT CHAT"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/textChatInput"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:hint="اكتب سؤالك أو أمرك هنا..."
+                    android:textColorHint="#5C7A82"
+                    android:textColor="#D7FBFF"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:background="@drawable/hud_glow_card"
+                    android:inputType="text"
+                    android:imeOptions="actionSend"
+                    android:singleLine="true" />
+
+                  <TextView
+                    android:id="@+id/textChatSendButton"
+                    android:layout_width="70dp"
+                    android:layout_height="48dp"
+                    android:gravity="center"
+                    android:text="SEND"
+                    android:textColor="#8DEFFF"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+
+            <!-- كاتب الملاحظات الصوتي الفوري: زر واحد، تكلم، يُحفظ وينظَّم تلقائيًا -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="VOICE NOTES"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/voiceNoteButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="16dp"
+                android:gravity="center"
+                android:text="VOICE NOTE: TAP TO RECORD"
+                android:textColor="#8DEFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="AI SUGGESTIONS"
+                android:textColor="#76E8F5"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1" />
+
+            <TextView
+                android:id="@+id/aiRefreshButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:padding="12dp"
+                android:gravity="center"
+                android:text="TAP TO GENERATE"
+                android:textColor="#8DEFFF"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.06"
+                android:background="@drawable/hud_glow_card"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/aiSuggestionsText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="120dp"
+                android:text=""
+                android:textColor="#8AA0A8"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="8dp"
+                android:padding="12dp"
+                android:background="@drawable/hud_glow_card" />
+
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) -->
+        <ScrollView
+            android:id="@+id/morePanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                   <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:id="@+id/moreFakeCallButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:text="FAKE CALL"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/moreSendLocationButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SEND SOS LOCATION"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:id="@+id/moreRecordStartButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="REC START"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreRecordStopButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="REC STOP"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreDefenseInfoButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SELF-DEFENSE INFO"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="#1E323A" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="\u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                  <TextView
+                    android:id="@+id/moreFakeCallButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:text="FAKE CALL"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/moreSendLocationButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SEND SOS LOCATION"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:id="@+id/moreRecordStartButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="REC START"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreRecordStopButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="REC STOP"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreDefenseInfoButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SELF-DEFENSE INFO"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="#1E323A" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="\u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="10dp">
+
+                    <TextView
+                        android:id="@+id/moreFieldListButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="FIELD LOG"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreFieldExportButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="EXPORT CSV"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreCompassButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="REC STOP"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreDefenseInfoButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="SELF-DEFENSE INFO"
+                    android:textColor="#A7EAF2"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="#1E323A" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="\u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="10dp">
+
+                    <TextView
+                        android:id="@+id/moreFieldListButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="FIELD LOG"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreFieldExportButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="EXPORT CSV"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreCompassButton"
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="COMPASS"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+                  <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="#1E323A" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="أدوات وميزات إضافية"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="CAMERA &amp; AI"
+                    android:textColor="#4E7A82"
+                    android:textSize="9sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.15" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/moreNoteScannerButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="SCAN NOTE"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                      <TextView
+                        android:id="@+id/moreImaginaryEyeButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="IMAGINARY EYE"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/more3dScanButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="3D SCAN"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreMorningBriefingButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="MORNING BRIEFING"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="PRODUCTIVITY"
+                    android:textColor="#4E7A82"
+                    android:textSize="9sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.15" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/morePomodoroStartButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="START POMODORO"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/morePomodoroStopButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="STOP POMODORO"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="ASSISTANT"
+                    android:textColor="#4E7A82"
+                    android:textSize="9sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.15" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/moreDailyQuestionButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="DAILY QUESTION"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/moreJokeButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="TELL A JOKE"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="TRAVEL &amp; MODE"
+                    android:textColor="#4E7A82"
+                    android:textSize="9sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.15" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/moreMoodCheckButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="MOOD CHECK"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                      <TextView
+                        android:id="@+id/moreTrafficButton"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="TRAFFIC: HOME"
+                        android:textColor="#A7EAF2"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreDrivingModeButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="DRIVING MODE: OFF"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="SCHEDULE"
+                    android:textColor="#4E7A82"
+                    android:textSize="9sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.15" />
+
+                <TextView
+                    android:id="@+id/moreAddClassButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="ADD CLASS"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/moreAddEventButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="ADD EVENT"
+                    android:textColor="#A7EAF2"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="#1E323A" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="HALAL WALLET"
+                    android:textColor="#76E8F5"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="vertical"
+                    android:padding="16dp"
+                    android:background="@drawable/hud_glow_card">
+
+                    <TextView
+                        android:id="@+id/walletMonthTotal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="إجمالي هذا الشهر: 0"
+                        android:textColor="#D7FBFF"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/walletBreakdown"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="ماكاين أي نفقات مسجّلة بعد"
+                        android:textColor="#8AA0A8"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="6dp" />
+
+                    <TextView
+                        android:id="@+id/walletSavingSuggestion"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text=""
+                        android:textColor="#3CE696"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/walletAddExpenseButton"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center"
+                        android:text="ADD EXPENSE"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+
+                    <TextView
+                        android:id="@+id/walletAddIncomeButton"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="ADD INCOME"
+                        android:textColor="#8DEFFF"
+                        android:textSize="10sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/hud_glow_card"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/moreStatusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text=""
+                    android:textColor="#5C7A82"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+        </ScrollView>
+
+    </FrameLayout>
+
+    <!-- Small circular button that toggles the sidebar's visibility.
+         Placed last so it always renders on top of both the top bar and the sidebar. -->
+    <TextView
+        android:id="@+id/sidebarToggle"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="17dp"
+        android:layout_marginTop="7dp"
+        android:gravity="center"
+        android:text="\u2261"
+        android:textColor="#8DEFFF"
+        android:textSize="15sp"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <!-- \u0645\u0631\u0627\u0642\u0628 \u0627\u0644\u0623\u062F\u0627\u0621: FPS + \u0627\u0644\u0630\u0627\u0643\u0631\u0629. \u064A\u0638\u0647\u0631 \u0641\u064A Debug \u0628\u0646\u0627\u0621 \u0641\u0642\u0637 (\u0645\u062E\u0641\u064A \u0628\u0634\u0643\u0644 \u0627\u0641\u062A\u0631\u0627\u0636\u064A) -->
+    <TextView
+        android:id="@+id/perfMonitor"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="128dp"
+        android:layout_marginEnd="8dp"
+        android:text="FPS: -- | MEM: -- MB"
+        android:textColor="#4A808A"
+        android:textSize="8sp"
+        android:fontFamily="monospace"
+        android:background="#80101820"
+        android:padding="4dp"
+        android:visibility="gone" />
+
+      <!-- نافذة عرض تقرير مركزية: تظهر فوق كل شي للمعلومات الكبيرة/المفصّلة -->
+    <FrameLayout
+        android:id="@+id/reportPanelOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#DD05090C"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="20dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:background="@drawable/hud_glow_card_bright">
+
+            <TextView
+                android:id="@+id/reportPanelTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="J.A.R.V.I.S. REPORT"
+                android:textColor="#8DEFFF"
+                android:textSize="14sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.12"
+                android:gravity="center" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="14dp"
+                android:background="#3AA7B8" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <TextView
+                    android:id="@+id/reportPanelBody"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#D7FBFF"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="10dp" />
+            </ScrollView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/reportPanelSaveButton"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center"
+                    android:text="SAVE"
+                    android:textColor="#3CE696"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/reportPanelCloseButton"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="CLOSE"
+                    android:textColor="#FF7A7A"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.1"
+                    android:background="@drawable/hud_glow_card"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+</FrameLayout>
