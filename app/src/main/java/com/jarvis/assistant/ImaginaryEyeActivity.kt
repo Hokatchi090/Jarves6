@@ -54,8 +54,8 @@ class ImaginaryEyeActivity : AppCompatActivity() {
                 statusText.text = "\u0645\u0627 \u0644\u0642\u064A\u062A\u0634 \u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0641\u064A assets/ \u0631\u0627\u062C\u0639 \u062A\u0639\u0644\u064A\u0645\u0627\u062A \u0627\u0644\u062A\u062B\u0628\u064A\u062A"
                 captureButton.isEnabled = false
             }
-        } catch (e: Exception) {
-            statusText.text = "\u062A\u0639\u0630\u0651\u0631 \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0646\u0645\u0648\u0630\u062C: ${e.message}"
+        } catch (e: Throwable) {
+            statusText.text = "\u062A\u0639\u0630\u0651\u0631 \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0646\u0645\u0648\u0630\u062C (\u062A\u0623\u0643\u062F \u0645\u0646 \u0648\u062C\u0648\u062F \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u062B\u0644\u0627\u062B\u0629 \u0641\u064A assets/): ${e.message ?: e.javaClass.simpleName}"
             captureButton.isEnabled = false
         }
 
