@@ -34,6 +34,7 @@ import android.graphics.Typeface
 import android.view.Choreographer
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.GestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.speech.tts.TextToSpeech
@@ -202,21 +203,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // ---- \u0645\u0641\u062A\u0627\u062D Gemini: \u064A\u062C\u064A \u0645\u0646 BuildConfig (\u0645\u0635\u062F\u0631\u0647 local.properties \u0623\u0648 GitHub Secrets) ----
     // \u0644\u0627 \u062A\u062D\u0637 \u0627\u0644\u0645\u0641\u062A\u0627\u062D \u0647\u0646\u0627 \u0623\u0628\u062F\u0627\u064B. \u0634\u0648\u0641 \u0645\u0644\u0641 local.properties.example
-    private val GEMINI_API_KEY = "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw"
+    private val GEMINI_API_KEY: String
+        get() = storedKey("key_gemini", "AQ.Ab8RN6I6vqRW4nOUpgsViYy8XTMZzyWDagN2VNz8NPXqBvK1fw")
 
     // خادم احتياطي اختياري: يُستعمل فقط لو مفتاح Gemini فارغ أو فشل الاتصال به.
     // حطّ هنا رابط أي API ترجع رد نصي (نص خام، أو JSON فيه حقل "reply"/"response"/"text").
-    private val ONLINE_CHAT_ENDPOINT = ""
+    private val ONLINE_CHAT_ENDPOINT = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIuvVcSYHOUkQPD+Knqk1Q1JPmZjHCqC0FrIU2d1ZEC+ Hokatchi090"
+
+    // مفتاح OpenAI اختياري (مدفوع حسب استخدامك) — فقط إذا تحب تجرب مزوّد OPENAI بدل Gemini
+    private val OPENAI_API_KEY = "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"
     private val geminiClient by lazy { GeminiClient(GEMINI_API_KEY) }
 
     // ---- \u0645\u0641\u062A\u0627\u062D Google Maps: \u0646\u0641\u0633 \u0627\u0644\u0645\u0628\u062F\u0623\u060C \u064A\u062C\u064A \u0645\u0646 BuildConfig ----
-    private val GOOGLE_MAPS_API_KEY = BuildConfig.GOOGLE_MAPS_API_KEY
+    private val GOOGLE_MAPS_API_KEY: String
+        get() = storedKey("key_google_maps", BuildConfig.GOOGLE_MAPS_API_KEY)
 
     companion object {
         private const val REQ_SPEECH = 100
         private const val REQ_PERMISSIONS = 200
         private const val REQ_CONTACTS = 300
         private const val REQ_LOCATION = 400
+        private const val REQ_ROCK_PHOTO = 9301
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -230,6 +237,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         logText = findViewById(R.id.logText)
         setupHudStatusPanel()
         setupReportPanel()
+        setupFloatingQuickButton()
         setupTextChat()
         setupNavigationPresets()
         setupAddWaypointButton()
@@ -329,11 +337,265 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         currentReportText = body
         findViewById<TextView>(R.id.reportPanelTitle).text = title
         findViewById<TextView>(R.id.reportPanelBody).text = body
-        findViewById<View>(R.id.reportPanelOverlay).visibility = View.VISIBLE
+        val overlay = findViewById<View>(R.id.reportPanelOverlay)
+        overlay.alpha = 0f
+        overlay.scaleX = 0.85f
+        overlay.scaleY = 0.85f
+        overlay.visibility = View.VISIBLE
+        overlay.animate()
+            .alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(260L)
+            .setInterpolator(android.view.animation.OvershootInterpolator(0.9f))
+            .start()
     }
 
     private fun hideReportPanel() {
-        findViewById<View>(R.id.reportPanelOverlay).visibility = View.GONE
+        val overlay = findViewById<View>(R.id.reportPanelOverlay)
+        overlay.animate()
+            .alpha(0f).scaleX(0.85f).scaleY(0.85f)
+            .setDuration(180L)
+            .setInterpolator(android.view.animation.AccelerateInterpolator())
+            .withEndAction {
+                overlay.visibility = View.GONE
+                overlay.scaleX = 1f
+                overlay.scaleY = 1f
+                overlay.alpha = 1f
+            }
+            .start()
+    }
+
+    // ---------------- الزر العائم: سحب حر + ضغطة = قائمة سريعة + ضغطتين = استماع ----------------
+
+    // ---------------- \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0645\u0646\u0633\u0651\u0642 (JarvisOrchestrator) ----------------
+
+    private val orchestrator by lazy {
+        JarvisOrchestrator(
+            client,
+            openAiKeyProvider = { storedKey("key_openai", OPENAI_API_KEY) },
+            geminiKeyProvider = { storedKey("key_gemini", GEMINI_API_KEY) }
+        )
+    }
+
+    private fun isOrchestratorModeOn(): Boolean =
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).getBoolean("orchestrator_mode", false)
+
+    private fun toggleOrchestratorMode() {
+        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        val newState = !isOrchestratorModeOn()
+        prefs.edit().putBoolean("orchestrator_mode", newState).apply()
+        findViewById<TextView>(R.id.sysOrchestratorButton)?.text =
+            if (newState) "ORCHESTRATOR MODE: ON" else "ORCHESTRATOR MODE: OFF"
+        respond(if (newState) "\u062A\u0645 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0645\u0646\u0633\u0651\u0642" else "\u062A\u0645 \u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0645\u0646\u0633\u0651\u0642\u060C \u0631\u062C\u0639\u0646\u0627 \u0644\u0644\u0646\u0638\u0627\u0645 \u0627\u0644\u0645\u0628\u0627\u0634\u0631")
+    }
+
+    private fun runOrchestrator(text: String) {
+        val handlers = object : JarvisOrchestrator.CategoryHandlers {
+            override fun onNavigation(text: String, callback: (String) -> Unit) {
+                callback(
+                    if (lastKnownLat == 0.0 && lastKnownLon == 0.0)
+                        "\u062C\u064A\u0628 \u0645\u0648\u0642\u0639\u0643 \u0627\u0644\u062D\u0627\u0644\u064A \u0623\u0648\u0644\u0627\u064B \u0645\u0646 \u0635\u0641\u062D\u0629 MAP"
+                    else "\u0645\u0648\u0642\u0639\u0643 \u0627\u0644\u062D\u0627\u0644\u064A \u0645\u062D\u0641\u0648\u0638\u060C \u0627\u0641\u062A\u062D \u0635\u0641\u062D\u0629 MAP \u0644\u0644\u0645\u0644\u0627\u062D\u0629 \u0623\u0648 \u0642\u0648\u0644 \u0627\u0633\u0645 \u0627\u0644\u0648\u062C\u0647\u0629 (\u0645\u0646\u0632\u0644\u060C \u0639\u0645\u0644\u060C \u062C\u0627\u0645\u0639\u0629)"
+                )
+            }
+            override fun onWeather(text: String, callback: (String) -> Unit) {
+                fetchWeatherOnly { result -> callback(result) }
+            }
+            override fun onGeology(text: String, callback: (String) -> Unit) {
+                jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.ROCK_SEARCH, text))
+                callback("\u062C\u0627\u0631\u064A \u0627\u0644\u0628\u062D\u062B \u0641\u064A \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0635\u062E\u0648\u0631 \u0648\u0627\u0644\u0645\u0639\u0627\u062F\u0646")
+            }
+            override fun onHealth(text: String, callback: (String) -> Unit) {
+                callback("\u0644\u0644\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0648\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F\u060C \u0627\u0633\u062A\u0639\u0645\u0644 \u0642\u0633\u0645 MEDICAL REMINDERS \u0641\u064A \u0635\u0641\u062D\u0629 MORE. \u0645\u0627 \u0646\u0642\u062F\u0631\u0634 \u0646\u0639\u0637\u064A \u0646\u0635\u064A\u062D\u0629 \u0637\u0628\u064A\u0629\u060C \u0627\u0633\u062A\u0634\u0631 \u0637\u0628\u064A\u0628 \u062D\u0642\u064A\u0642\u064A \u062F\u0627\u0626\u0645\u064B\u0627")
+            }
+            override fun onCoding(text: String, callback: (String) -> Unit) {
+                val provider = if (storedKey("key_openai", OPENAI_API_KEY).isNotBlank()) {
+                    OpenAIProvider(storedKey("key_openai", OPENAI_API_KEY))
+                } else {
+                    GeminiProvider(storedKey("key_gemini", GEMINI_API_KEY))
+                }
+                if (!provider.isConfigured()) {
+                    callback("\u0645\u0627\u0641\u064A\u0634 \u0623\u064A \u0645\u0641\u062A\u0627\u062D API \u0645\u0641\u0639\u0651\u0644 \u0644\u0644\u0628\u0631\u0645\u062C\u0629")
+                    return
+                }
+                provider.ask(
+                    "\u0627\u0643\u062A\u0628 \u0643\u0648\u062F \u0644\u0640: $text. \u0623\u0639\u0637\u0646\u064A \u0627\u0644\u0643\u0648\u062F \u0641\u0642\u0637 \u0645\u0639 \u062A\u0639\u0644\u064A\u0642\u0627\u062A \u0642\u0635\u064A\u0631\u0629",
+                    emptyList(), "You are a helpful coding assistant.", client,
+                    onSuccess = { code -> showReportPanel("CODE", code); callback("\u062C\u0647\u0651\u0632\u062A \u0627\u0644\u0643\u0648\u062F\u060C \u0634\u0648\u0641 \u0627\u0644\u0634\u0627\u0634\u0629") },
+                    onError = { err -> callback("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u0648\u0644\u0651\u062F \u0627\u0644\u0643\u0648\u062F: $err") }
+                )
+            }
+            override fun onNotes(text: String, callback: (String) -> Unit) {
+                callback(searchScannedNotes(text))
+            }
+            override fun onImage(text: String, callback: (String) -> Unit) {
+                callback("\u0644\u062A\u062D\u0644\u064A\u0644 \u0635\u0648\u0631\u0629\u060C \u0627\u0633\u062A\u0639\u0645\u0644 \u0632\u0631 IDENTIFY ROCK FROM PHOTO \u0623\u0648 IMAGINARY EYE \u0645\u0646 \u0635\u0641\u062D\u0629 MORE")
+            }
+            override fun onVoice(text: String, callback: (String) -> Unit) {
+                callback("\u0644\u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0635\u0648\u062A \u0623\u0648 \u0627\u0644\u0644\u063A\u0629\u060C \u0627\u0633\u062A\u0639\u0645\u0644 \u0623\u0632\u0631\u0627\u0631 \u0635\u0641\u062D\u0629 SYS")
+            }
+        }
+
+        orchestrator.process(
+            text = text,
+            history = conversationHistory,
+            handlers = handlers,
+            onFinal = { finalText -> runOnUiThread { respondWithAutoTriage(finalText) } },
+            onError = { err -> runOnUiThread { respond("\u062E\u0637\u0623: $err") } }
+        )
+    }
+
+    /** يجيب الطقس فقط (بدون بقية عناصر الملخص الصباحي) — يُستعمل من العقل المنسّق ومن الملخص الصباحي معًا */
+    private fun fetchWeatherOnly(callback: (String) -> Unit) {
+        if (lastKnownLat == 0.0 && lastKnownLon == 0.0) {
+            callback("\u0645\u0627\u0639\u0646\u062F\u064A \u0645\u0648\u0642\u0639 \u062D\u0627\u0644\u064A \u0628\u0627\u0634 \u0646\u062C\u064A\u0628\u0644\u0643 \u0627\u0644\u0637\u0642\u0633")
+            return
+        }
+        val url = "https://api.open-meteo.com/v1/forecast?latitude=$lastKnownLat&longitude=$lastKnownLon&current_weather=true"
+        val request = Request.Builder().url(url).get().build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                callback("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0627\u0644\u0637\u0642\u0633")
+            }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val json = JSONObject(response.body?.string() ?: "")
+                    val temp = json.getJSONObject("current_weather").getDouble("temperature")
+                    callback("\u0627\u0644\u0637\u0642\u0633 \u062D\u0627\u0644\u064A\u064B\u0627 ${temp.toInt()}\u00B0")
+                } catch (e: Exception) {
+                    callback("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628 \u0627\u0644\u0637\u0642\u0633")
+                }
+            }
+        })
+    }
+
+    // ---------------- مرجع الجدول الدوري + مخلاط العناصر (Gemini، معلومات كيميائية عامة) ----------------
+
+    private fun lookupPeriodicElement(query: String) {
+        val provider = GeminiProvider(GEMINI_API_KEY)
+        if (!provider.isConfigured()) {
+            respond("محتاج مفتاح Gemini فعّال (زر API KEYS في SYS)")
+            return
+        }
+        val prompt = "أعطني معلومات عن العنصر الكيميائي \"$query\" من الجدول الدوري، بالعربية، بهذا الترتيب بالضبط " +
+                "وبدون أي مقدمة: الاسم والرمز والعدد الذري | الفئة (فلز/لافلز/غاز نبيل...) | أهم الخصائص الفيزيائية " +
+                "| أين يوجد في الطبيعة | درجة حرارة الانصهار والغليان | ظروف الحفظ الآمن (الحرارة/الرطوبة/التفاعل مع الهواء) " +
+                "إن وُجدت. إذا لم يكن هذا اسم عنصر معروف من الجدول الدوري قل ذلك بوضوح بدل التخمين."
+        provider.ask(
+            prompt, emptyList(), "أنت مرجع كيميائي دقيق ومختصر.", client,
+            onSuccess = { reply -> runOnUiThread { showReportPanel("PERIODIC TABLE: ${query.uppercase()}", reply) } },
+            onError = { err -> runOnUiThread { respond("ما قدرتش أجيب المعلومة: $err") } }
+        )
+    }
+
+    private fun predictElementMix(elementsText: String) {
+        val provider = GeminiProvider(GEMINI_API_KEY)
+        if (!provider.isConfigured()) {
+            respond("محتاج مفتاح Gemini فعّال (زر API KEYS في SYS)")
+            return
+        }
+        val prompt = "بصفتك أستاذ كيمياء، اشرح ماذا يحدث (إن كان هناك تفاعل كيميائي معروف علميًا) عند خلط هذه " +
+                "العناصر/المواد معًا: \"$elementsText\". اذكر: هل يحدث تفاعل فعلي أم لا، نوع التفاعل إن وُجد، " +
+                "الناتج المتوقع، وأي تحذير سلامة عام مهم (بدون تفاصيل تصنيع أي مادة خطرة). " +
+                "إذا كان الخليط غير معروف أو غير منطقي كيميائيًا، أو لا تملك معلومة موثوقة، قل ذلك بصراحة بدل التخمين. جواب مختصر وواضح."
+        provider.ask(
+            prompt, emptyList(), "أنت أستاذ كيمياء حذر ودقيق، لا تخترع معلومات.", client,
+            onSuccess = { reply -> runOnUiThread { showReportPanel("ELEMENT MIXER: $elementsText", reply) } },
+            onError = { err -> runOnUiThread { respond("ما قدرتش أحلل الخليط: $err") } }
+        )
+    }
+
+    private fun setupFloatingQuickButton() {
+        val button = findViewById<View>(R.id.floatingQuickButton)
+        val menu = findViewById<View>(R.id.floatingQuickMenu)
+
+        var initialX = 0f
+        var initialY = 0f
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var isDragging = false
+
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                menu.visibility = View.GONE
+                if (::jarvisDial.isInitialized) jarvisDial.triggerWakeBurst()
+                startListening()
+                return true
+            }
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (menu.visibility == View.VISIBLE) {
+                    menu.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f).setDuration(140L)
+                        .withEndAction { menu.visibility = View.GONE }.start()
+                } else {
+                    menu.alpha = 0f
+                    menu.scaleX = 0.9f
+                    menu.scaleY = 0.9f
+                    menu.visibility = View.VISIBLE
+                    menu.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(160L)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                }
+                return true
+            }
+        })
+
+        button.setOnTouchListener { view, event ->
+            gestureDetector.onTouchEvent(event)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = view.translationX
+                    initialY = view.translationY
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+                    if (kotlin.math.abs(dx) > 12 || kotlin.math.abs(dy) > 12) {
+                        isDragging = true
+                        view.translationX = initialX + dx
+                        view.translationY = initialY + dy
+                        menu.translationX = initialX + dx
+                        menu.translationY = initialY + dy
+                        menu.visibility = View.GONE
+                    }
+                    true
+                }
+                else -> true
+            }
+        }
+
+        findViewById<TextView>(R.id.quickMenuHome).setOnClickListener {
+            selectNavByKey("HOME"); menu.visibility = View.GONE
+        }
+        findViewById<TextView>(R.id.quickMenuMap).setOnClickListener {
+            selectNavByKey("MAP"); menu.visibility = View.GONE
+        }
+        findViewById<TextView>(R.id.quickMenuAi).setOnClickListener {
+            selectNavByKey("AI"); menu.visibility = View.GONE
+        }
+        findViewById<TextView>(R.id.quickMenuMore).setOnClickListener {
+            selectNavByKey("MORE"); menu.visibility = View.GONE
+        }
+        findViewById<TextView>(R.id.quickMenuVoiceNote).setOnClickListener {
+            menu.visibility = View.GONE
+            startVoiceNoteCapture()
+        }
+    }
+
+    private fun selectNavByKey(key: String) {
+        val viewId = when (key) {
+            "HOME" -> R.id.navHome
+            "MAP" -> R.id.navMap
+            "LAB" -> R.id.navLab
+            "SYS" -> R.id.navSys
+            "NET" -> R.id.navNet
+            "AI" -> R.id.navAi
+            "MORE" -> R.id.navMore
+            else -> R.id.navHome
+        }
+        findViewById<View>(viewId).performClick()
     }
 
     private fun setupReportPanel() {
@@ -467,6 +729,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var isFemaleVoice: Boolean = false
     private var noteCaptureMode = false
     private lateinit var halalWallet: HalalWalletManager
+    private lateinit var medicalReminders: MedicalReminderManager
+    private var pendingRockPhotoPath: String = ""
     private var maleDepth = 40
     private var maleRoughness = 45
     private var maleRasp = 0
@@ -923,6 +1187,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun handleCommandInternal(text: String) {
         val cmd = normalizeArabic(text.lowercase(Locale("ar")).trim())
         usageTracker.recordCommand(cmd)
+
+        if (isOrchestratorModeOn()) {
+            runOrchestrator(text)
+            return
+        }
 
         when {
             // \u0646\u0633\u064A\u0627\u0646 \u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u0639 Gemini \u0645\u0646 \u063A\u064A\u0631 \u0645\u0627 \u0646\u0639\u064A\u062F \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642
@@ -1463,15 +1732,47 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val offlineReply = offlineRules(cmd)
         if (offlineReply != null) return offlineReply
 
-        if (GEMINI_API_KEY.isNotBlank()) {
-            askGemini(cmd)
-            return "\u0628\u0641\u0643\u0631..."
-        }
-        if (ONLINE_CHAT_ENDPOINT.isNotBlank()) {
-            askOnlineChatEndpoint(cmd)
+        val provider = currentAIProvider()
+        if (provider.isConfigured()) {
+            provider.ask(
+                message = cmd,
+                history = conversationHistory,
+                systemPrompt = buildJarvisPersona(),
+                client = client,
+                onSuccess = { reply ->
+                    conversationHistory.add("user" to cmd)
+                    conversationHistory.add("model" to reply)
+                    runOnUiThread { respondWithAutoTriage(reply) }
+                },
+                onError = { err ->
+                    runOnUiThread { respond("\u0645\u0627 \u0642\u062F\u0631\u062A \u0646\u062C\u064A\u0628: $err") }
+                }
+            )
             return "\u0628\u0641\u0643\u0631..."
         }
         return "\u0645\u0627 \u0641\u0647\u0645\u062A\u0634"
+    }
+
+    // ---------------- \u0627\u062E\u062A\u064A\u0627\u0631 \u0645\u0632\u0648\u0651\u062F \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A ----------------
+
+    private fun currentAIProvider(): AIProvider {
+        val saved = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("ai_provider", "GEMINI") ?: "GEMINI"
+        return when (saved) {
+            "OPENAI" -> OpenAIProvider(storedKey("key_openai", OPENAI_API_KEY))
+            "LOCAL" -> LocalProvider(ONLINE_CHAT_ENDPOINT) { offlineRules(it) }
+            else -> GeminiProvider(storedKey("key_gemini", GEMINI_API_KEY))
+        }
+    }
+
+    private fun cycleAIProvider() {
+        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        val order = listOf("GEMINI", "OPENAI", "LOCAL")
+        val current = prefs.getString("ai_provider", "GEMINI") ?: "GEMINI"
+        val next = order[(order.indexOf(current) + 1) % order.size]
+        prefs.edit().putString("ai_provider", next).apply()
+        findViewById<TextView>(R.id.sysAiProviderButton)?.text = "AI PROVIDER: $next"
+        respond("\u062A\u0645 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 \u0644ـ $next")
     }
 
     /** خادم احتياطي بسيط: يُستدعى فقط لو Gemini غير مفعّل أو فشل. يقبل رد نصي خام أو JSON بسيط */
@@ -1541,7 +1842,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 "You remember the conversation so far and refer back to it naturally when relevant. " +
                 "$nameContext" +
                 "Language rule: always reply in the same language the user's current message is written in (if it mixes languages, reply in English; default to English only if truly ambiguous). " +
-                "Keep answers concise \u2014 a few sentences unless the user is asking for something detailed or technical, in which case give it properly."
+                "Keep answers concise \u2014 a few sentences unless the user is asking for something detailed or technical, in which case give it properly. " +
+                "Honesty rule (very important): if you don't actually know something with confidence, or you're not sure a fact is correct, say so plainly (e.g. 'I'm not sure about that' or '\u0645\u0627 \u0639\u0646\u062F\u064A \u0645\u0639\u0644\u0648\u0645\u0629 \u0645\u0648\u062B\u0648\u0642\u0629 \u0639\u0644\u0649 \u0647\u0630\u0627' in Arabic) instead of guessing or inventing an answer that sounds confident. A short honest 'I don't know' is always better than a made-up answer, especially for factual, medical, or geological claims."
     }
 
     private fun askGemini(message: String) {
@@ -2647,7 +2949,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         fun switchPanel(key: String) {
-            panels.forEach { (k, panel) -> panel.visibility = if (k == key) View.VISIBLE else View.GONE }
+            panels.forEach { (k, panel) ->
+                if (k == key) {
+                    if (panel.visibility != View.VISIBLE) {
+                        panel.alpha = 0f
+                        panel.scaleX = 0.97f
+                        panel.scaleY = 0.97f
+                        panel.visibility = View.VISIBLE
+                        panel.animate()
+                            .alpha(1f).scaleX(1f).scaleY(1f)
+                            .setDuration(180L)
+                            .setInterpolator(android.view.animation.DecelerateInterpolator())
+                            .start()
+                    }
+                } else if (panel.visibility == View.VISIBLE) {
+                    panel.animate()
+                        .alpha(0f)
+                        .setDuration(120L)
+                        .withEndAction { panel.visibility = View.GONE; panel.alpha = 1f }
+                        .start()
+                }
+            }
             navItems.forEach { (k, item) ->
                 if (k == key) {
                     item.background = GradientDrawable().apply {
@@ -2755,6 +3077,29 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         setupVoiceTuningSliders()
         setupBackgroundListeningToggle()
+
+        val savedProvider = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("ai_provider", "GEMINI") ?: "GEMINI"
+        findViewById<TextView>(R.id.sysAiProviderButton).text = "AI PROVIDER: $savedProvider"
+        findViewById<TextView>(R.id.sysAiProviderButton).setOnClickListener {
+            cycleAIProvider()
+        }
+
+        val savedVoiceEngine = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("voice_engine", "ANDROID") ?: "ANDROID"
+        findViewById<TextView>(R.id.sysVoiceEngineButton).text = "VOICE ENGINE: $savedVoiceEngine"
+        findViewById<TextView>(R.id.sysVoiceEngineButton).setOnClickListener {
+            cycleVoiceEngine()
+        }
+        findViewById<TextView>(R.id.sysApiKeysButton).setOnClickListener {
+            showApiKeysDialog()
+        }
+
+        findViewById<TextView>(R.id.sysOrchestratorButton).text =
+            if (isOrchestratorModeOn()) "ORCHESTRATOR MODE: ON" else "ORCHESTRATOR MODE: OFF"
+        findViewById<TextView>(R.id.sysOrchestratorButton).setOnClickListener {
+            toggleOrchestratorMode()
+        }
         handleWakeServiceLaunch(intent)
 
         // ---- MORE panel: \u0632\u0631 \u062D\u0642\u064A\u0642\u064A \u0644\u0643\u0644 \u0645\u064A\u0632\u0629 (\u0627\u0644\u0633\u0644\u0627\u0645\u0629 \u0627\u0644\u0634\u062E\u0635\u064A\u0629 + \u0627\u0644\u062C\u064A\u0648\u0644\u0648\u062C\u064A\u0627) ----
@@ -2788,6 +3133,73 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         findViewById<TextView>(R.id.moreCompassButton).setOnClickListener {
             jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.COMPASS_READ))
         }
+
+        // ---- MORE panel: إضافة ملاحظة ميدانية (كانت مفقودة — سبب "الدفتر فاضي دايمًا") ----
+        findViewById<TextView>(R.id.moreFieldAddButton).setOnClickListener {
+            val container = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                val pad = (16 * resources.displayMetrics.density).toInt()
+                setPadding(pad, pad, pad, pad)
+            }
+            val noteInput = android.widget.EditText(this).apply { hint = "الملاحظة الميدانية" }
+            val rockInput = android.widget.EditText(this).apply { hint = "نوع الصخر (اختياري)" }
+            container.addView(noteInput)
+            container.addView(rockInput)
+            android.app.AlertDialog.Builder(this)
+                .setTitle("إضافة ملاحظة ميدانية")
+                .setView(container)
+                .setPositiveButton("حفظ") { _, _ ->
+                    val note = noteInput.text.toString().trim()
+                    val rock = rockInput.text.toString().trim()
+                    val argument = if (rock.isNotBlank()) "$note|$rock" else note
+                    jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.FIELD_LOG_ADD, argument))
+                }
+                .setNegativeButton("إلغاء", null)
+                .show()
+        }
+
+        // ---- MORE panel: قاعدة الصخور والمعادن (كانت مبنية لكن غير موصولة بأي زر) ----
+        findViewById<TextView>(R.id.moreRockLookupButton).setOnClickListener {
+            val input = android.widget.EditText(this).apply { hint = "اسم الصخر أو المعدن (مثلاً: كوارتز)" }
+            android.app.AlertDialog.Builder(this)
+                .setTitle("بحث عن صخر/معدن")
+                .setView(input)
+                .setPositiveButton("بحث") { _, _ ->
+                    jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.ROCK_INFO, input.text.toString()))
+                }
+                .setNegativeButton("إلغاء", null)
+                .show()
+        }
+        findViewById<TextView>(R.id.moreRockIdButton).setOnClickListener {
+            val input = android.widget.EditText(this).apply { hint = "صف الصخر: اللون، الصلابة، البريق..." }
+            android.app.AlertDialog.Builder(this)
+                .setTitle("تعرّف على صخر من وصفه")
+                .setView(input)
+                .setPositiveButton("بحث") { _, _ ->
+                    jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.ROCK_SEARCH, input.text.toString()))
+                }
+                .setNegativeButton("إلغاء", null)
+                .show()
+        }
+        findViewById<TextView>(R.id.moreGeoErasButton).setOnClickListener {
+            showReportPanel("GEOLOGIC TIME SCALE", geologicErasReference())
+        }
+        findViewById<TextView>(R.id.moreRockPhotoIdButton).setOnClickListener {
+            startRockPhotoIdentification()
+        }
+
+        // ---- MORE panel: التذكيرات الطبية ----
+        medicalReminders = MedicalReminderManager(
+            this, getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        ) { msg -> respond(msg) }
+        findViewById<TextView>(R.id.addMedicationButton).setOnClickListener {
+            medicalReminders.showAddMedicationDialog()
+        }
+        findViewById<TextView>(R.id.addAppointmentButton).setOnClickListener {
+            medicalReminders.showAddAppointmentDialog()
+        }
+        medicalReminders.renderList()
+        medicalReminders.rescheduleAll()
 
         // ---- MORE panel: أزرار الميزات الإضافية (بدون الحاجة للصوت) ----
         findViewById<TextView>(R.id.moreNoteScannerButton).setOnClickListener {
@@ -2901,6 +3313,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // ---- LAB panel: فتح DESIGN LAB ----
         findViewById<TextView>(R.id.labOpenButton).setOnClickListener {
             startActivity(Intent(this, DesignLabActivity::class.java))
+        }
+
+        // ---- LAB panel: مرجع الجدول الدوري + مخلاط العناصر (عبر Gemini، وليس قاعدة بيانات ثابتة) ----
+        findViewById<TextView>(R.id.labElementLookupButton).setOnClickListener {
+            val elementQuery = findViewById<android.widget.EditText>(R.id.labElementInput).text.toString().trim()
+            if (elementQuery.isBlank()) {
+                respond("اكتب اسم العنصر أو رمزه أولاً")
+            } else {
+                respond("جاري البحث...")
+                lookupPeriodicElement(elementQuery)
+            }
+        }
+        findViewById<TextView>(R.id.labMixerButton).setOnClickListener {
+            val mixInput = findViewById<android.widget.EditText>(R.id.labMixerInput).text.toString().trim()
+            if (mixInput.isBlank()) {
+                respond("اكتب العناصر مفصولة بفاصلة أولاً")
+            } else {
+                respond("جاري التحليل...")
+                predictElementMix(mixInput)
+            }
         }
 
         // ---- AI panel: طلب اقتراحات حقيقية من Gemini ----
@@ -4473,9 +4905,137 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // ---------------- Output helpers ----------------
 
+    // ---------------- \u0625\u062F\u0627\u0631\u0629 \u0645\u0641\u0627\u062A\u064A\u062D API \u0645\u062A\u0639\u062F\u062F\u0629: \u0643\u0644 \u0645\u0641\u062A\u0627\u062D \u064A\u062E\u062F\u0645 \u062E\u0627\u0635\u064A\u0629 \u0645\u0639\u064A\u0651\u0646\u0629 ----------------
+
+    /** يقرأ مفتاح API من الإعدادات المحفوظة إن وُجد، وإلا يرجع القيمة الثابتة بالكود (fallback) */
+    private fun storedKey(prefKey: String, fallback: String): String {
+        val saved = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).getString(prefKey, "") ?: ""
+        return saved.ifBlank { fallback }
+    }
+
+    private fun showApiKeysDialog() {
+        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        fun labeledInput(label: String, prefKey: String): android.widget.EditText {
+            val labelView = TextView(this).apply {
+                text = label
+                setTextColor(android.graphics.Color.parseColor("#76E8F5"))
+                textSize = 10f
+                setPadding(0, (10 * resources.displayMetrics.density).toInt(), 0, 4)
+            }
+            val input = android.widget.EditText(this).apply {
+                hint = "\u0627\u0644\u0635\u0642\u0647\u0646\u0627..."
+                setText(prefs.getString(prefKey, ""))
+            }
+            container.addView(labelView)
+            container.addView(input)
+            return input
+        }
+
+        val geminiInput = labeledInput("GEMINI \u2014 \u0627\u0644\u0639\u0642\u0644 \u0627\u0644\u0623\u0633\u0627\u0633\u064A (\u0645\u062D\u0627\u062F\u062B\u0629 + \u062A\u0646\u0633\u064A\u0642)", "key_gemini")
+        val openAiInput = labeledInput("OPENAI \u2014 \u0645\u062D\u0627\u062F\u062B\u0629 \u0628\u062F\u064A\u0644\u0629", "key_openai")
+        val elevenInput = labeledInput("ELEVENLABS \u2014 \u0635\u0648\u062A \u0623\u0648\u0636\u062D \u0648\u0623\u062E\u0634\u0646 (\u0645\u062C\u0627\u0646\u064A \u062D\u062A\u0649 \u062D\u062F)", "key_elevenlabs")
+        val mapsInput = labeledInput("GOOGLE MAPS \u2014 \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0631\u064A\u0642 \u0648\u0627\u0644\u0645\u0633\u0627\u0641\u0627\u062A", "key_google_maps")
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("\u0645\u0641\u0627\u062A\u064A\u062D API")
+            .setView(android.widget.ScrollView(this).apply { addView(container) })
+            .setPositiveButton("\u062D\u0641\u0638") { _, _ ->
+                prefs.edit()
+                    .putString("key_gemini", geminiInput.text.toString().trim())
+                    .putString("key_openai", openAiInput.text.toString().trim())
+                    .putString("key_elevenlabs", elevenInput.text.toString().trim())
+                    .putString("key_google_maps", mapsInput.text.toString().trim())
+                    .apply()
+                respond("\u062A\u0645 \u062D\u0641\u0638 \u0627\u0644\u0645\u0641\u0627\u062A\u064A\u062D")
+            }
+            .setNegativeButton("\u0625\u0644\u063A\u0627\u0621", null)
+            .show()
+    }
+
+    private fun cycleVoiceEngine() {
+        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        val current = prefs.getString("voice_engine", "ANDROID") ?: "ANDROID"
+        val next = if (current == "ANDROID") "ELEVENLABS" else "ANDROID"
+        if (next == "ELEVENLABS" && storedKey("key_elevenlabs", "").isBlank()) {
+            respond("\u062D\u0637 \u0645\u0641\u062A\u0627\u062D ElevenLabs \u0623\u0648\u0644\u0627\u064B \u0645\u0646 \u0632\u0631 \u0645\u0641\u0627\u062A\u064A\u062D API")
+            return
+        }
+        prefs.edit().putString("voice_engine", next).apply()
+        findViewById<TextView>(R.id.sysVoiceEngineButton)?.text = "VOICE ENGINE: $next"
+        respond(if (next == "ELEVENLABS") "\u062A\u0645 \u0627\u0644\u062A\u0628\u062F\u064A\u0644 \u0644\u0635\u0648\u062A ElevenLabs" else "\u062A\u0645 \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0635\u0648\u062A \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u0639\u0627\u062F\u064A")
+    }
+
+    /** يحوّل النص لصوت عبر ElevenLabs API (جودة أعلى من الهاتف، أصوات رجالية أعمق) ويشغّله */
+    private fun speakViaElevenLabs(text: String, apiKey: String) {
+        val voiceId = "pNInz6obpgDQGcFmaJgB" // صوت رجالي افتراضي من ElevenLabs (Adam)
+        val body = JSONObject().apply {
+            put("text", text)
+            put("model_id", "eleven_multilingual_v2")
+            put("voice_settings", JSONObject().apply {
+                put("stability", 0.5)
+                put("similarity_boost", 0.75)
+            })
+        }
+        val request = Request.Builder()
+            .url("https://api.elevenlabs.io/v1/text-to-speech/$voiceId")
+            .addHeader("xi-api-key", apiKey)
+            .addHeader("Content-Type", "application/json")
+            .addHeader("Accept", "audio/mpeg")
+            .post(body.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "fallback_${System.currentTimeMillis()}") }
+            }
+            override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread { tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "fallback_${System.currentTimeMillis()}") }
+                    return
+                }
+                try {
+                    val audioBytes = response.body?.bytes() ?: return
+                    val file = java.io.File(cacheDir, "eleven_${System.currentTimeMillis()}.mp3")
+                    file.writeBytes(audioBytes)
+                    runOnUiThread {
+                        if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.SPEAKING)
+                        val player = android.media.MediaPlayer()
+                        player.setDataSource(file.absolutePath)
+                        player.setOnCompletionListener {
+                            it.release()
+                            file.delete()
+                            if (::jarvisDial.isInitialized) jarvisDial.setHudState(JarvisHudState.READY)
+                            if (continuousMode && !lectureMode) {
+                                retryHandler.postDelayed({ if (continuousMode) startListening() }, 450L)
+                            }
+                        }
+                        player.prepare()
+                        player.start()
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "fallback_${System.currentTimeMillis()}") }
+                }
+            }
+        })
+    }
+
     private fun respond(text: String) {
         log("\u062C\u0627\u0631\u0641\u0633: $text")
         speechRecognizer?.stopListening()
+
+        val voiceEngine = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            .getString("voice_engine", "ANDROID") ?: "ANDROID"
+        val elevenKey = storedKey("key_elevenlabs", "")
+        if (voiceEngine == "ELEVENLABS" && elevenKey.isNotBlank()) {
+            speakViaElevenLabs(text, elevenKey)
+            return
+        }
 
         // \u0644\u0645\u062D\u0631\u0643\u0627\u062A TTS \u062D\u062F \u0623\u0642\u0635\u0649 \u0644\u0637\u0648\u0644 \u0627\u0644\u0646\u0635 \u0641\u064A \u0627\u0644\u0627\u0633\u062A\u062F\u0639\u0627\u0621 \u0627\u0644\u0648\u0627\u062D\u062F \u2014 \u0627\u0644\u0646\u0635 \u0627\u0644\u0637\u0648\u064A\u0644 (\u0645\u062B\u0644 \u0631\u062F\u0648\u062F Gemini) \u0643\u0627\u0646 \u064A\u062A\u0642\u0637\u0639 \u0628\u0635\u0645\u062A. \u0646\u0642\u0633\u0651\u0645\u0647 \u0644\u062C\u0645\u0644 \u0648\u0646\u0631\u0633\u0644\u0647\u0645 \u0648\u0627\u062D\u062F \u0628\u0648\u0627\u062D\u062F
         val maxLen = try {
@@ -4691,5 +5251,103 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (requestCode == JarvisGeologyModule.REQ_FIELD_PHOTO && resultCode == RESULT_OK) {
             jarvisGeologyModule.onPhotoCaptured()
         }
+        if (requestCode == REQ_ROCK_PHOTO && resultCode == RESULT_OK) {
+            identifyRockFromPhoto()
+        }
     }
+
+    // ---------------- تعرّف على صخر من صورة (عبر Gemini Vision) ----------------
+
+    /** يحتاج مفتاح Gemini صالح — يعتمد على قدرة Gemini على تحليل الصور (multimodal) */
+    private fun startRockPhotoIdentification() {
+        if (GEMINI_API_KEY.isBlank()) {
+            respond("هذه الخاصية تحتاج مفتاح Gemini فعّال باش تحلل الصورة")
+            return
+        }
+        try {
+            val dir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES) ?: filesDir
+            if (!dir.exists()) dir.mkdirs()
+            val file = java.io.File(dir, "rock_id_${System.currentTimeMillis()}.jpg")
+            pendingRockPhotoPath = file.absolutePath
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.provider", file)
+            val camIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+            }
+            startActivityForResult(camIntent, REQ_ROCK_PHOTO)
+            respond("صوّر الصخر أو المعدن بوضوح وضوء جيد")
+        } catch (e: Exception) {
+            respond("ما قدرتش أفتح الكاميرا: ${e.message}")
+        }
+    }
+
+    private fun identifyRockFromPhoto() {
+        if (pendingRockPhotoPath.isBlank()) return
+        val bitmap = android.graphics.BitmapFactory.decodeFile(pendingRockPhotoPath) ?: run {
+            respond("ما قدرتش أقرأ الصورة")
+            return
+        }
+        respond("جاري تحليل الصورة...")
+
+        val outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+        val base64Image = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+
+        val requestBody = JSONObject().apply {
+            put("contents", org.json.JSONArray().put(JSONObject().apply {
+                put("parts", org.json.JSONArray()
+                    .put(JSONObject().apply {
+                        put("text", "أنت جيولوجي خبير. حلل هذه الصورة لصخر أو معدن، واذكر بالعربية: الاسم الأرجح، الفئة (نارية/رسوبية/تحولية/معدن)، وأهم علامة ميدانية تؤكد هويته. إذا لم تكن متأكدًا، اذكر أقرب احتمالين. جملتان إلى ثلاث فقط")
+                    })
+                    .put(JSONObject().apply {
+                        put("inline_data", JSONObject().apply {
+                            put("mime_type", "image/jpeg")
+                            put("data", base64Image)
+                        })
+                    })
+                )
+            }))
+        }
+
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$GEMINI_API_KEY"
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { respond("ما قدرتش أوصل لـ Gemini، تأكد من الإنترنت") }
+            }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val json = JSONObject(response.body?.string() ?: "")
+                    val reply = json.getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+                    runOnUiThread { showReportPanel("ROCK IDENTIFICATION", reply.trim()) }
+                } catch (e: Exception) {
+                    runOnUiThread { respond("ما قدرتش أفهم رد التحليل") }
+                }
+            }
+        })
+    }
+
+    private fun geologicErasReference(): String = """
+        الحقب السحيق (Precambrian): 4600 - 541 مليون سنة — تكوّن الأرض، أول أشكال الحياة البسيطة
+
+        الحقب القديم (Paleozoic): 541 - 252 مليون سنة
+        - الكمبري، الأردوفيشي، السيلوري، الديفوني، الكربوني، البرمي
+        - انفجار الحياة، ظهور الأسماك والنباتات البرية، انقراض جماعي كبير في النهاية
+
+        الحقب الوسيط (Mesozoic): 252 - 66 مليون سنة
+        - الترياسي، الجوراسي، الطباشيري
+        - عصر الديناصورات، انتهى بانقراض جماعي (نيزك تشيكشولوب)
+
+        الحقب الحديث (Cenozoic): 66 مليون سنة - الآن
+        - الباليوجيني، النيوجيني، الرباعي
+        - عصر الثدييات، ظهور الإنسان
+    """.trimIndent()
 }
