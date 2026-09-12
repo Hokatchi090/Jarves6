@@ -34,11 +34,12 @@ class JarvisOrchestrator(
         fun onNotes(text: String, callback: (String) -> Unit)
         fun onImage(text: String, callback: (String) -> Unit)
         fun onVoice(text: String, callback: (String) -> Unit)
+        fun onFitness(text: String, callback: (String) -> Unit)
     }
 
     private val categories = listOf(
         "GENERAL", "SEARCH", "NAVIGATION", "WEATHER", "VOICE",
-        "IMAGE", "GEOLOGY", "HEALTH", "CODING", "NOTES"
+        "IMAGE", "GEOLOGY", "HEALTH", "CODING", "NOTES", "FITNESS"
     )
 
     fun process(
@@ -58,6 +59,7 @@ class JarvisOrchestrator(
                 "NOTES" -> handlers.onNotes(text) { raw -> restyle(raw, onFinal) }
                 "IMAGE" -> handlers.onImage(text) { raw -> onFinal(raw) }
                 "VOICE" -> handlers.onVoice(text) { raw -> onFinal(raw) }
+                "FITNESS" -> handlers.onFitness(text) { raw -> restyle(raw, onFinal) }
                 "SEARCH" -> askGemini(text, history, onFinal, onError)
                 else -> askGPT(text, history, onFinal, onError)
             }
@@ -106,7 +108,9 @@ class JarvisOrchestrator(
     private fun classifyByKeywords(text: String): String {
         val t = text.lowercase()
         return when {
-            t.contains("\u0637\u0642\u0633") || t.contains("weather") -> "WEATHER"
+            t.contains("\u0637\u0642\u0633") || t.contains("weather") || t.contains("\u0645\u0637\u0631") || t.contains("rain") -> "WEATHER"
+            t.contains("\u062E\u0637\u0648\u0627\u062A") || t.contains("steps") || t.contains("\u0633\u0639\u0631\u0627\u062A") ||
+                t.contains("calor") || t.contains("\u0645\u0633\u0627\u0641\u0629") || t.contains("distance") -> "FITNESS"
             t.contains("\u0637\u0631\u064A\u0642") || t.contains("\u0648\u062C\u0647\u0629") || t.contains("\u0645\u0644\u0627\u062D\u0629") -> "NAVIGATION"
             t.contains("\u0635\u062E\u0631") || t.contains("\u0645\u0639\u062F\u0646") || t.contains("\u062C\u064A\u0648\u0644\u0648\u062C\u064A") -> "GEOLOGY"
             t.contains("\u062F\u0648\u0627\u0621") || t.contains("\u0645\u0648\u0639\u062F") || t.contains("\u0635\u062D\u0629") || t.contains("\u0637\u0628\u064A\u0628") -> "HEALTH"
