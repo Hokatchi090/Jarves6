@@ -118,6 +118,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var lastBrowserUrl = "https://www.google.com"
     private var lastQueuedUtteranceId: String? = null
 
+    private val jarvisWeatherModule by lazy {
+        JarvisWeatherModule(
+            context = this,
+            getLocation = { Pair(lastKnownLat, lastKnownLon) }
+        )
+    }
+    private val jarvisFitnessModule by lazy {
+        JarvisFitnessModule(
+            context = this,
+            speak = { msg -> respond(msg) }
+        )
+    }
+    private val jarvisNewsModule by lazy { JarvisNewsModule(client) }
+
     // ---- \u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u0639 Gemini: \u0646\u062D\u062A\u0641\u0638 \u0628\u0622\u062E\u0631 \u062A\u0628\u0627\u062F\u0644 \u0623\u0633\u0626\u0644\u0629/\u0631\u062F\u0648\u062F \u0628\u0627\u0634 \u064A\u0641\u0647\u0645 \u0627\u0644\u0633\u064A\u0627\u0642 \u0648\u0645\u0627 \u064A\u0646\u0633\u0627\u0634\u064A \u0641\u064A \u0643\u0644 \u0631\u0633\u0627\u0644\u0629
     // \u0643\u0644 \u0639\u0646\u0635\u0631 = "role" ("user" \u0623\u0648 "model") \u0645\u0639 \u0627\u0644\u0646\u0635
     private val conversationHistory = mutableListOf<Pair<String, String>>()
@@ -230,6 +244,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         jarvisDial = findViewById(R.id.jarvisDial)
+        restoreSavedBackgroundColor()
         setupModuleMenu()
         setupSidebarUi()
 
@@ -246,14 +261,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             scheduleEventCheckAlarm()
         }
         scheduleMorningBriefingAlarm()
+        scheduleWeatherAlertChecks()
         tts = TextToSpeech(this, this)
 
         userName = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("user_name", "") ?: ""
+            .getString("user_name", "") ?: " youcef "
         userEmail = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("user_email", "") ?: ""
+            .getString("user_email", "") ?: "youcefakram4@gmail.com"
         userPhone = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
-            .getString("user_phone", "") ?: ""
+            .getString("user_phone", "") ?: "0775540495"
         if (userName.isNotBlank()) {
             log("\u062C\u0627\u0631\u0641\u0633: \u0623\u0647\u0644\u0627 ${userName}\u060C \u0645\u0628\u0633\u0648\u0637 \u0625\u0646\u0643 \u0631\u062C\u0639\u062A")
         }
@@ -398,7 +414,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 )
             }
             override fun onWeather(text: String, callback: (String) -> Unit) {
-                fetchWeatherOnly { result -> callback(result) }
+                jarvisWeatherModule.fetchFiveDayForecast { result -> callback(result) }
+            }
+            override fun onFitness(text: String, callback: (String) -> Unit) {
+                callback(jarvisFitnessModule.summaryText())
             }
             override fun onGeology(text: String, callback: (String) -> Unit) {
                 jarvisGeologyModule.execute(JarvisIntent(JarvisIntentType.ROCK_SEARCH, text))
@@ -993,6 +1012,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         ) {
             needed.add(Manifest.permission.POST_NOTIFICATIONS)
         }
+        if (Build.VERSION.SDK_INT >= 29 &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed.add(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
         if (needed.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_PERMISSIONS)
         }
@@ -1194,6 +1219,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
 
         when {
+            // steps / calories / distance (fitness module)
+            cmd.contains("steps") || cmd.contains("calor") || cmd.contains("distance") -> {
+                jarvisFitnessModule.speakSummary()
+            }
+            // detailed 5-day forecast
+            cmd.contains("forecast") -> {
+                jarvisWeatherModule.fetchFiveDayForecast { result ->
+                    runOnUiThread {
+                        showReportPanel("WEATHER - 5 DAYS", result)
+                        respond(result.replace("\n", ", "))
+                    }
+                }
+            }
+            // floating overlay bubble toggle
+            cmd.contains("bubble") -> {
+                toggleFloatingBubble()
+            }
+            // background color picker
+            cmd.contains("color") || cmd.contains("\u0644\u0648\u0646 \u0627\u0644\u062E\u0644\u0641\u064A\u0629") -> {
+                showBackgroundColorDialog()
+            }
             // \u0646\u0633\u064A\u0627\u0646 \u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0629 \u0645\u0639 Gemini \u0645\u0646 \u063A\u064A\u0631 \u0645\u0627 \u0646\u0639\u064A\u062F \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642
             cmd.contains("\u0627\u0646\u0633\u0649 \u0643\u0644\u0627\u0645\u064A") || cmd.contains("\u0627\u0645\u0633\u062D \u0627\u0644\u0630\u0627\u0643\u0631\u0629") ||
                     cmd.contains("forget everything") || cmd.contains("clear memory") -> {
@@ -1841,7 +1887,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 "You speak like a real person having a conversation, not like a corporate chatbot \u2014 no 'As an AI' disclaimers, no bullet-point overload unless the user actually needs a list. " +
                 "You remember the conversation so far and refer back to it naturally when relevant. " +
                 "$nameContext" +
-                "Language rule: always reply in the same language the user's current message is written in (if it mixes languages, reply in English; default to English only if truly ambiguous). " +
+                "Language rule: the user may write in Arabic, English, or a mix of both in the same sentence (Arabic-English code-switching, e.g. Arabic words mixed with English technical terms). Understand all of it fully regardless of mixing. Always reply in Arabic (Modern Standard or a natural spoken dialect), even if the user's message was fully in English or mixed. You may keep proper nouns, brand names, or technical terms in English within an Arabic sentence when that's natural, but the sentence structure and overall reply must be Arabic. " +
                 "Keep answers concise \u2014 a few sentences unless the user is asking for something detailed or technical, in which case give it properly. " +
                 "Honesty rule (very important): if you don't actually know something with confidence, or you're not sure a fact is correct, say so plainly (e.g. 'I'm not sure about that' or '\u0645\u0627 \u0639\u0646\u062F\u064A \u0645\u0639\u0644\u0648\u0645\u0629 \u0645\u0648\u062B\u0648\u0642\u0629 \u0639\u0644\u0649 \u0647\u0630\u0627' in Arabic) instead of guessing or inventing an answer that sounds confident. A short honest 'I don't know' is always better than a made-up answer, especially for factual, medical, or geological claims."
     }
@@ -3451,6 +3497,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun showLocationOnUi(location: Location) {
         lastKnownLat = location.latitude
         lastKnownLon = location.longitude
+        getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+            .putFloat("last_lat", location.latitude.toFloat())
+            .putFloat("last_lon", location.longitude.toFloat())
+            .apply()
         findViewById<TextView>(R.id.mapLat).text = "LAT: ${"%.5f".format(location.latitude)}"
         findViewById<TextView>(R.id.mapLon).text = "LON: ${"%.5f".format(location.longitude)}"
         findViewById<TextView>(R.id.mapStatus).text = "تم تحديث الموقع"
@@ -4661,8 +4711,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         var weatherDone = false
         var newsDone = false
 
-        // \u0627\u0644\u0637\u0642\u0633 \u0639\u0628\u0631 Open-Meteo (\u0645\u062C\u0627\u0646\u064A \u0628\u062F\u0648\u0646 \u0645\u0641\u062A\u0627\u062D)
-        val weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lastKnownLat&longitude=$lastKnownLon&current_weather=true"
+        // الطقس عبر Open-Meteo (مجاني بدون مفتاح) — نضيف احتمال المطر اليوم لاقتراح المظلة
+        val weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lastKnownLat&longitude=$lastKnownLon&current_weather=true&daily=precipitation_probability_max&timezone=auto&forecast_days=1"
         val weatherRequest = Request.Builder().url(weatherUrl).get().build()
         client.newCall(weatherRequest).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -4674,35 +4724,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     val json = JSONObject(response.body?.string() ?: "")
                     val current = json.getJSONObject("current_weather")
                     val temp = current.getDouble("temperature")
-                    weatherPart = "\u0627\u0644\u0637\u0642\u0633 \u062D\u0627\u0644\u064A\u064B\u0627 ${temp.toInt()}\u00B0"
+                    var part = "\u0627\u0644\u0637\u0642\u0633 \u062D\u0627\u0644\u064A\u064B\u0627 ${temp.toInt()}\u00B0"
+                    try {
+                        val rainChance = json.getJSONObject("daily")
+                            .getJSONArray("precipitation_probability_max").getInt(0)
+                        if (rainChance >= 40) {
+                            part += "\u060C \u0627\u062D\u062A\u0645\u0627\u0644 \u0645\u0637\u0631 $rainChance\u066A \u2014 \u062E\u0648\u062F \u0645\u0638\u0644\u0629 \u0645\u0639\u0627\u0643 \u064A\u0645\u0643\u0646"
+                        }
+                    } catch (inner: Exception) { }
+                    weatherPart = part
                 } catch (e: Exception) { }
                 weatherDone = true
                 runOnUiThread { maybeFinish(weatherDone, newsDone) }
             }
         })
 
-        // \u062E\u0628\u0631 \u0648\u0627\u062D\u062F \u0639\u0628\u0631 RSS
-        val rssUrl = "https://www.aljazeera.net/aljazeerarss/xml"
-        val rssRequest = Request.Builder().url(rssUrl).get().build()
-        client.newCall(rssRequest).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                newsDone = true
-                runOnUiThread { maybeFinish(weatherDone, newsDone) }
-            }
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val body = response.body?.string() ?: ""
-                    val firstItem = body.substringAfter("<item>").substringBefore("</item>")
-                    val title = firstItem.substringAfter("<title>").substringBefore("</title>")
-                        .replace("<![CDATA[", "").replace("]]>", "").trim()
-                    if (title.isNotBlank()) {
-                        newsPart = "\u0622\u062E\u0631 \u0627\u0644\u0623\u062E\u0628\u0627\u0631: $title"
-                    }
-                } catch (e: Exception) { }
-                newsDone = true
-                runOnUiThread { maybeFinish(weatherDone, newsDone) }
-            }
-        })
+        // \u0623\u062E\u0628\u0627\u0631 \u0645\u0635\u0646\u0651\u0641\u0629: \u062A\u0643\u0646\u0648\u0644\u0648\u062C\u064A\u0627 + \u062A\u0631\u0646\u062F + \u0643\u0648\u0627\u0631\u062B + \u0633\u064A\u0627\u0633\u0629 \u0639\u0627\u0644\u0645\u064A\u0629/\u0648\u0637\u0646\u064A\u0629 (JarvisNewsModule)
+        jarvisNewsModule.fetchCategorizedNews { categorized ->
+            newsPart = categorized
+            newsDone = true
+            runOnUiThread { maybeFinish(weatherDone, newsDone) }
+        }
     }
 
     private fun nearestUpcomingEventText(): String? {
@@ -4732,6 +4774,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             android.app.AlarmManager.RTC_WAKEUP,
             calendar.timeInMillis,
             android.app.AlarmManager.INTERVAL_DAY,
+            pending
+        )
+    }
+
+    /** يجدول فحص دوري (كل 30 دقيقة) لتوقعات المطر/العاصفة القريبة عبر WeatherAlertReceiver */
+    private fun scheduleWeatherAlertChecks() {
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        val intent = Intent(this, WeatherAlertReceiver::class.java)
+        val pending = PendingIntent.getBroadcast(
+            this, 7003, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        alarmManager.setRepeating(
+            android.app.AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + 60_000L,
+            30 * 60 * 1000L,
             pending
         )
     }
@@ -4911,6 +4969,50 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun storedKey(prefKey: String, fallback: String): String {
         val saved = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).getString(prefKey, "") ?: ""
         return saved.ifBlank { fallback }
+    }
+
+    // ---------------- \u0645\u0648\u062F \u062A\u063A\u064A\u064A\u0631 \u0644\u0648\u0646 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 (\u064A\u062F\u0648\u064A) ----------------
+
+    private val backgroundColorOptions = linkedMapOf(
+        "\u0623\u0635\u0641\u0631" to "#3D3300",
+        "\u0628\u0631\u062A\u0642\u0627\u0644\u064A" to "#3D1F00",
+        "\u0623\u0632\u0631\u0642" to "#001A3D",
+        "\u0623\u062E\u0636\u0631" to "#00330F",
+        "\u0648\u0631\u062F\u064A" to "#3D0022",
+        "\u0628\u0646\u0641\u0633\u062C\u064A" to "#22003D"
+    )
+
+    /** يطبّق لون خلفية مخصص على الشاشة الرئيسية (rootHud) ويحفظه */
+    private fun applyBackgroundColor(hex: String) {
+        try {
+            findViewById<View>(R.id.rootHud)?.setBackgroundColor(android.graphics.Color.parseColor(hex))
+            getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).edit()
+                .putString("bg_color_hex", hex).apply()
+        } catch (e: Exception) { }
+    }
+
+    /** يعيد تطبيق آخر لون محفوظ عند فتح التطبيق */
+    private fun restoreSavedBackgroundColor() {
+        val hex = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE).getString("bg_color_hex", null)
+        if (!hex.isNullOrBlank()) {
+            try {
+                findViewById<View>(R.id.rootHud)?.setBackgroundColor(android.graphics.Color.parseColor(hex))
+            } catch (e: Exception) { }
+        }
+    }
+
+    private fun showBackgroundColorDialog() {
+        val names = backgroundColorOptions.keys.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("\u0644\u0648\u0646 \u0627\u0644\u062E\u0644\u0641\u064A\u0629")
+            .setItems(names) { _, which ->
+                val chosenName = names[which]
+                val hex = backgroundColorOptions[chosenName] ?: return@setItems
+                applyBackgroundColor(hex)
+                respond("\u062A\u0645 \u062A\u063A\u064A\u064A\u0631 \u0644\u0648\u0646 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u0625\u0644\u0649 $chosenName")
+            }
+            .setNegativeButton("\u0625\u0644\u063A\u0627\u0621", null)
+            .show()
     }
 
     private fun showApiKeysDialog() {
@@ -5110,6 +5212,56 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             intent.removeExtra("SHOW_MORNING_BRIEFING")
             retryHandler.postDelayed({ generateMorningBriefing() }, 600L)
         }
+        when (intent?.getStringExtra("BUBBLE_ACTION")) {
+            "WEATHER" -> {
+                intent.removeExtra("BUBBLE_ACTION")
+                retryHandler.postDelayed({
+                    jarvisWeatherModule.fetchFiveDayForecast { result ->
+                        runOnUiThread {
+                            showReportPanel("WEATHER - 5 DAYS", result)
+                            respond(result.replace("\n", ", "))
+                        }
+                    }
+                }, 400L)
+            }
+            "FITNESS" -> {
+                intent.removeExtra("BUBBLE_ACTION")
+                retryHandler.postDelayed({ jarvisFitnessModule.speakSummary() }, 400L)
+            }
+            "API_KEYS" -> {
+                intent.removeExtra("BUBBLE_ACTION")
+                retryHandler.postDelayed({ showApiKeysDialog() }, 400L)
+            }
+        }
+    }
+
+    /** يشغّل أو يوقف خدمة الفقاعة العائمة (JarvisBubbleService) بعد التأكد من إذن الرسم فوق التطبيقات */
+    private fun toggleFloatingBubble() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
+            respond("\u062D\u0637 \u0625\u0630\u0646 \u0627\u0644\u0631\u0633\u0645 \u0641\u0648\u0642 \u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A \u0623\u0648\u0644\u0627\u064B")
+            val intent = Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            return
+        }
+        val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+        val isOn = prefs.getBoolean("bubble_on", false)
+        val serviceIntent = Intent(this, JarvisBubbleService::class.java)
+        if (isOn) {
+            stopService(serviceIntent)
+            prefs.edit().putBoolean("bubble_on", false).apply()
+            respond("\u062A\u0645 \u0625\u064A\u0642\u0627\u0641 \u0627\u0644\u0641\u0642\u0627\u0639\u0629 \u0627\u0644\u0639\u0627\u0626\u0645\u0629")
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            prefs.edit().putBoolean("bubble_on", true).apply()
+            respond("\u0627\u0644\u0641\u0642\u0627\u0639\u0629 \u0627\u0644\u0639\u0627\u0626\u0645\u0629 \u0634\u063A\u0627\u0644\u0629 \u0627\u0644\u0622\u0646")
+        }
     }
 
     private fun setupBackgroundListeningToggle() {
@@ -5204,6 +5356,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         stopPerfMonitor()
         nfcHelper.disableForegroundDispatch()
         geoCompass.stop()
+        jarvisFitnessModule.stop()
         if (::jarvisDial.isInitialized) {
             jarvisDial.pauseAnimation()
         }
@@ -5225,6 +5378,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         startPerfMonitor()
         nfcHelper.enableForegroundDispatch()
         geoCompass.start()
+        jarvisFitnessModule.start()
         // \u0646\u0631\u062C\u0639 \u0644\u0644\u0627\u0633\u062A\u0645\u0627\u0639 \u063A\u064A\u0631 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0633\u062A\u0645\u0631 (Continuous Mode) \u0645\u0641\u0639\u0651\u0644 \u0642\u0628\u0644 \u0645\u0627 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u064A\u0631\u0648\u062D \u0644\u0644\u062E\u0644\u0641\u064A\u0629
         if (continuousMode) {
             startListening()
