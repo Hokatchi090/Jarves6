@@ -31,6 +31,7 @@ class JarvisWakeService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isRunning = false
+    private var fitnessModule: JarvisFitnessModule? = null
 
     companion object {
         const val CHANNEL_ID = "jarvis_wake_service"
@@ -42,6 +43,8 @@ class JarvisWakeService : Service() {
         super.onCreate()
         startForeground(NOTIF_ID, buildNotification())
         startWakeListening()
+        fitnessModule = JarvisFitnessModule(this) { }
+        fitnessModule?.start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -155,6 +158,7 @@ class JarvisWakeService : Service() {
         handler.removeCallbacksAndMessages(null)
         speechRecognizer?.destroy()
         speechRecognizer = null
+        fitnessModule?.stop()
         super.onDestroy()
     }
 }
