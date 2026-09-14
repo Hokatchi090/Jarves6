@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_join_group"
+        android:title="الانضمام إلى مجموعة" />
+    <item
+        android:id="@+id/menu_manage_group_chat"
+        android:title="إدارة الدردشة الجماعية" />
+    <item
+        android:id="@+id/menu_group_settings"
+        android:title="إعدادات المجموعة" />
+</menu>
